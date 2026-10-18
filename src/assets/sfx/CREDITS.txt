@@ -1,0 +1,4 @@
+Sound effects in this folder are by Kenney (www.kenney.nl)
+Packs: "Impact Sounds", "RPG Audio", "Interface Sounds"
+License: Creative Commons Zero (CC0) — http://creativecommons.org/publicdomain/zero/1.0/
+Files were renamed to describe their in-game use (step_*, hit_*, break_*, ui_*).

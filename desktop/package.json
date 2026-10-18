@@ -1,0 +1,52 @@
+{
+  "name": "ore-rush-desktop",
+  "productName": "Ore Rush",
+  "version": "1.0.0",
+  "description": "Ore Rush - 3D voxel mining game as a desktop app",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "copy-game": "node copy-game.mjs",
+    "start": "npm run copy-game && electron .",
+    "dist:win": "npm run copy-game && electron-builder --win --x64",
+    "dist:mac": "npm run copy-game && electron-builder --mac",
+    "dist:linux": "npm run copy-game && electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "38.2.0",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "pl.orerush.game",
+    "productName": "Ore Rush",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "game/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "icon": "build/icon.png"
+  }
+}
