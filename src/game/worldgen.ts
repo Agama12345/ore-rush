@@ -286,9 +286,13 @@ export function generateChunk(
           else if (y < 20 && noise3(wx * 0.1, y * 0.12, wz * 0.1, seed + 2048) > 0.84) id = B.CLAY;
         }
 
-        if (y > 2 && depth > 0 && caveAt(wx, y, wz, seed)) {
-          if (lavaLakeAt(wx, y, wz, seed)) blocks[blockIndex(lx, y, lz)] = B.LAVA;
-          else if (hash3(wx, y, wz, seed + 4141) > 0.992) blocks[blockIndex(lx, y, lz)] = B.COBWEB;
+        // keep the top two layers solid so grass, flowers and trees never hang over a cave
+        if (y > 2 && depth > 1 && caveAt(wx, y, wz, seed)) {
+          // lava pools only sit on something solid, never float in mid-air
+          const below = blocks[blockIndex(lx, y - 1, lz)];
+          const supported = below !== 0 && below !== B.COBWEB;
+          if (supported && lavaLakeAt(wx, y, wz, seed)) blocks[blockIndex(lx, y, lz)] = B.LAVA;
+          else if (supported && hash3(wx, y, wz, seed + 4141) > 0.992) blocks[blockIndex(lx, y, lz)] = B.COBWEB; // webs only sit on a floor
           continue;
         }
 
