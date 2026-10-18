@@ -44,7 +44,8 @@ jobs:
         run: |
           VERSION=$(node -p "require('./desktop/package.json').version")
           TAG="v${VERSION}-build${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" desktop/release/*.exe \
+          cp dist/index.html ore-rush-web.html
+          gh release create "$TAG" desktop/release/*.exe ore-rush-web.html \
             --repo "$GITHUB_REPOSITORY" \
             --title "Ore Rush ${TAG}" \
             --notes "Pobierz plik Setup i uruchom instalator."
