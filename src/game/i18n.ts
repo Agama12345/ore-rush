@@ -226,6 +226,9 @@ const D: Record<string, Entry> = {
   /* ---------- engine popups ---------- */
   wrongTool: { en: "WRONG TOOL", pl: "ZŁE NARZĘDZIE" },
   wrongToolSub: { en: "you need a better pickaxe", pl: "potrzebujesz lepszego kilofa" },
+  bedSet: { en: "Spawn point set", pl: "Punkt odrodzenia ustawiony" },
+  bedSetSub: { en: "you will respawn next to this bed", pl: "odrodzisz się przy tym łóżku" },
+  droppedItems: { en: "items dropped where you died", pl: "przedmioty leżą tam, gdzie zginąłeś" },
   outOf: { en: "OUT OF {name}", pl: "BRAK: {name}" },
   mineMore: { en: "mine some more", pl: "wykop więcej" },
   noRoom: { en: "NO ROOM", pl: "BRAK MIEJSCA" },

@@ -370,6 +370,7 @@ export const RECIPES: Recipe[] = [
   shaped("torch-charcoal", B.TORCH, 4, ["C", "S"], { C: I.CHARCOAL, S: I.STICK }),
   shaped("furnace", B.FURNACE, 1, ["CCC", "C C", "CCC"], { C: B.COBBLE }),
   shaped("chest", B.CHEST, 1, ["PPP", "P P", "PPP"], { P: B.PLANKS }),
+  shaped("bed", B.BED, 1, ["WWW", "PPP"], { W: B.WOOL_WHITE, P: B.PLANKS }),
 
   // Campfire recipe (Logs + Sticks + Coal)
   shaped("campfire", B.CAMPFIRE, 1, [" S ", "SCS", "LLL"], { S: I.STICK, C: I.COAL, L: B.LOG }),
@@ -579,7 +580,7 @@ export const CREATIVE_GROUPS: { name: string; items: number[] }[] = [
   {
     name: "Build",
     items: [
-      B.CAMPFIRE, B.TORCH, B.GLOWSTONE, B.FURNACE, B.CRAFTING, B.CHEST, B.BOOKSHELF,
+      B.CAMPFIRE, B.TORCH, B.GLOWSTONE, B.FURNACE, B.CRAFTING, B.CHEST, B.BED, B.BOOKSHELF,
       B.BRICKS, B.STONE_BRICKS, B.MOSSY, B.GLASS, B.TNT,
       B.WOOL_WHITE, B.WOOL_RED, B.WOOL_BLUE, B.WOOL_YELLOW, B.WOOL_GREEN, B.WOOL_BLACK,
       B.WOOL_ORANGE, B.WOOL_PINK, B.WOOL_CYAN, B.WOOL_PURPLE,

@@ -407,6 +407,7 @@ export class VoxelGame {
     fallStart: 0,
   };
   private spawnPos = new THREE.Vector3(0.5, 70, 0.5);
+  private respawnPos: THREE.Vector3 | null = null; // set by sleeping in a bed
   private airTime = 0;
   private keys = new Set<string>();
   private touchMove = { x: 0, y: 0 };
@@ -785,6 +786,12 @@ export class VoxelGame {
         this.openContainer("furnace", `${tx},${ty},${tz}`);
         return;
       }
+      if (used === B.BED) {
+        this.triggerSwing();
+        this.respawnPos = new THREE.Vector3(tx + 0.5, ty + 1, tz + 0.5);
+        this.popup(t("bedSet"), t("bedSetSub"), "info");
+        return;
+      }
     }
     if (emptyHand) return;
     if (isItem(slot.id)) {
@@ -1116,6 +1123,7 @@ export class VoxelGame {
     this.arrows.forEach((arrow) => this.arrowRoot.remove(arrow.mesh));
     this.arrows = [];
     this.clearItemDrops();
+    this.respawnPos = null;
 
     const spawn = this.findSpawn();
     this.spawnPos.copy(spawn);
@@ -1141,7 +1149,7 @@ export class VoxelGame {
   }
 
   private placePlayerAtSpawn() {
-    const spawn = this.spawnPos;
+    const spawn = this.respawnPos ?? this.spawnPos;
     const bx = Math.floor(spawn.x);
     const bz = Math.floor(spawn.z);
     let y = Math.floor(spawn.y);
@@ -2283,7 +2291,7 @@ export class VoxelGame {
       if (!this.getChunk(Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE))) continue;
       const col = sampleColumn(x, z, this.seed);
       if (col.height <= SEA_LEVEL + 1 || col.biome === Biome.OCEAN) continue;
-      const hostile = night && Math.random() < 0.55;
+      const hostile = night && Math.random() < (this.mode === "survival" ? 0.7 : 0.55);
       const roll = Math.random();
       const passive = roll < 0.27 ? 0 : roll < 0.52 ? 1 : roll < 0.77 ? 2 : 4;
       this.mobs.push(this.createMob(hostile ? 3 : passive, x + 0.5, col.height + 1.02, z + 0.5));

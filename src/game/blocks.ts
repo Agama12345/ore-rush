@@ -87,6 +87,7 @@ export const B = {
   CAMPFIRE: 79,
   PACKED_ICE: 80,
   BLUE_ICE: 81,
+  BED: 82,
 } as const;
 
 /* ------------------------------------------------------------------ *
@@ -195,6 +196,8 @@ export const T = {
   CAMPFIRE_SIDE: 99,
   PACKED_ICE_TILE: 100,
   BLUE_ICE_TILE: 101,
+  BED_TOP: 102,
+  BED_SIDE: 103,
 } as const;
 
 export type ToolKind = "none" | "pickaxe" | "axe" | "shovel" | "sword" | "bow";
@@ -362,6 +365,7 @@ export const BLOCKS: Record<number, BlockDef> = {
   [B.CHEST]: def({ id: B.CHEST, name: "Chest", color: 0xb8943a, hardness: 0.5, score: 8, tool: "axe" }, { top: T.CHEST_TOP, side: T.CHEST_FRONT, bottom: T.CHEST_SIDE }),
   [B.TERRACOTTA]: def({ id: B.TERRACOTTA, name: "Terracotta", color: 0x9a5a3c, hardness: 0.7, score: 6, tool: "pickaxe" }, { top: T.TERRACOTTA }),
   [B.NETHERRACK]: def({ id: B.NETHERRACK, name: "Netherrack", color: 0x723636, hardness: 0.25, score: 4, tool: "pickaxe" }, { top: T.NETHERRACK }),
+  [B.BED]: def({ id: B.BED, name: "Bed", color: 0xb83b3b, hardness: 0.3, score: 6, tool: "axe" }, { top: T.BED_TOP, side: T.BED_SIDE }),
 };export const ORE_IDS = [B.COAL, B.IRON, B.GOLD, B.REDSTONE, B.LAPIS, B.DIAMOND, B.EMERALD];
 
 export const WARMTH_BLOCKS = [B.CAMPFIRE, B.LAVA];
@@ -1108,6 +1112,17 @@ PAINTERS[T.CAMPFIRE_SIDE] = (ctx, ox, oy, rnd) => {
 };
 PAINTERS[T.PACKED_ICE_TILE] = plainTex(["#b3e5fc", "#81d4fa", "#4fc3f7"], 20, ["#03a9f4", "#e1f5fe"]);
 PAINTERS[T.BLUE_ICE_TILE] = plainTex(["#4fc3f7", "#29b6f6", "#03a9f4"], 20, ["#0288d1", "#b3e5fc"]);
+PAINTERS[T.BED_TOP] = (ctx, ox, oy, rnd) => {
+  fill(ctx, ox, oy, rnd, ["#e8e2d6", "#ddd6c8"]);
+  for (let i = 0; i < 16; i++) px(ctx, ox, oy, i, 6, "#b83b3b"); // red blanket
+  for (let i = 0; i < 16; i++) px(ctx, ox, oy, i, 7, "#8e2a2a");
+  for (let i = 1; i < 5; i++) px(ctx, ox, oy, i, 2, "#fff8e8"); // pillow
+};
+PAINTERS[T.BED_SIDE] = (ctx, ox, oy, rnd) => {
+  fill(ctx, ox, oy, rnd, ["#6b4a2e", "#5a3e26"]);
+  for (let i = 0; i < 16; i++) { px(ctx, ox, oy, i, 0, "#3f2a18"); px(ctx, ox, oy, i, 15, "#3f2a18"); }
+  for (let i = 0; i < 16; i++) px(ctx, ox, oy, i, 9, "#b83b3b"); // blanket edge
+};
 
 PAINTERS[T.CAMPFIRE_TOP] = (ctx, ox, oy, rnd) => {
   fill(ctx, ox, oy, rnd, ["#3a2a1a", "#4a3424"]);
