@@ -2681,9 +2681,25 @@ export class VoxelGame {
       this.timeLeft = Math.max(0, this.timeLeft - 10);
       this.combo = 0;
     }
+    if (this.mode === "survival") this.dropInventoryOnDeath();
     this.health = MAX_HEALTH;
     this.placePlayerAtSpawn();
     if (this.mode === "sprint" && this.timeLeft <= 0) this.endRun();
+  }
+
+  /** Minecraft-style: everything in the hotbar and backpack lies on the ground where you died */
+  private dropInventoryOnDeath() {
+    const x = Math.floor(this.player.pos.x);
+    const y = Math.floor(this.player.pos.y);
+    const z = Math.floor(this.player.pos.z);
+    for (const slot of this.allSlots()) {
+      if (slot.id === 0 || slot.count <= 0) continue;
+      this.spawnItemDrop(slot.id, slot.count, x, y, z);
+      slot.id = 0;
+      slot.count = 0;
+    }
+    this.refreshHandModel();
+    this.emitStats(true);
   }
 
   /* ------------------------------------------------------------------ */
