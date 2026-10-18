@@ -7,6 +7,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -33,18 +35,14 @@ jobs:
           name: Ore-Rush-Windows
           path: desktop/release/*.exe
 
-      - name: Publish installer to public download repo
+      - name: Publish installer to Releases
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.DOWNLOAD_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "Brak sekretu DOWNLOAD_TOKEN, pomijam publikacje."
-            exit 0
-          fi
           VERSION=$(node -p "require('./desktop/package.json').version")
           TAG="v${VERSION}-build${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" desktop/release/*.exe \
-            --repo Agama12345/ore-rush-download \
+            --repo "$GITHUB_REPOSITORY" \
             --title "Ore Rush ${TAG}" \
-            --notes "Pobierz plik Setup i uruchom instalator. Potem wystarczy dwuklik na ikonę gry."
+            --notes "Pobierz plik Setup i uruchom instalator."
