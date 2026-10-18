@@ -1,8 +1,10 @@
 name: Build Windows app
 
 on:
-  push:
   workflow_dispatch:
+  push:
+    tags:
+      - "v*"
 
 jobs:
   build:
