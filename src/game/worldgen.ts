@@ -1,7 +1,7 @@
 import { B } from "./blocks";
 
 export const CHUNK_SIZE = 16;
-export const WORLD_HEIGHT = 96;
+export const WORLD_HEIGHT = 128;
 export const SEA_LEVEL = 34;
 export const CHUNK_VOLUME = CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT;
 
@@ -121,8 +121,8 @@ export function sampleColumn(wx: number, wz: number, seed: number, coldMode = fa
   const hills = fbm2(wx * 0.016, wz * 0.016, seed + 97, 3);
   const detail = fbm2(wx * 0.06, wz * 0.06, seed + 311, 2);
   const mountainMask = contrast(fbm2(wx * 0.0031, wz * 0.0031, seed + 555, 3), 2.3);
-  const temperature = fbm2(wx * 0.0048, wz * 0.0048, seed + 1201, 3);
-  const humidity = fbm2(wx * 0.0055, wz * 0.0055, seed + 2203, 3);
+  const temperature = fbm2(wx * 0.0027, wz * 0.0027, seed + 1201, 1);
+  const humidity = fbm2(wx * 0.003, wz * 0.003, seed + 2203, 1);
   const flatness = fbm2(wx * 0.0072, wz * 0.0072, seed + 3307, 2);
 
   let height = 24 + continent * 26 + hills * 9 + detail * 3;
@@ -135,7 +135,7 @@ export function sampleColumn(wx: number, wz: number, seed: number, coldMode = fa
     height += m * m * 62;
   }
   if (height < SEA_LEVEL - 2) height = SEA_LEVEL - 2 - (SEA_LEVEL - 2 - height) * 0.75;
-  height = Math.max(3, Math.min(WORLD_HEIGHT - 12, Math.round(height)));
+  height = Math.max(3, Math.min(WORLD_HEIGHT - 10, Math.round(height)));
 
   if (coldMode) {
     return {
@@ -149,12 +149,12 @@ export function sampleColumn(wx: number, wz: number, seed: number, coldMode = fa
   else if (height <= SEA_LEVEL + 1) biome = Biome.BEACH;
   else if (height > SEA_LEVEL + 34) biome = Biome.SNOWY;
   else if (height > SEA_LEVEL + 21) biome = Biome.MOUNTAINS;
-  else if (temperature < 0.3) biome = Biome.SNOWY;
-  else if (temperature < 0.4 && humidity > 0.5) biome = Biome.TAIGA;
-  else if (temperature > 0.64 && humidity < 0.4) biome = Biome.DESERT;
-  else if (temperature > 0.58 && humidity < 0.5) biome = Biome.SAVANNA;
+  else if (temperature < 0.24) biome = Biome.SNOWY;
+  else if (temperature < 0.36 && humidity > 0.5) biome = Biome.TAIGA;
+  else if (temperature > 0.72 && humidity < 0.36) biome = Biome.DESERT;
+  else if (temperature > 0.62 && humidity < 0.46) biome = Biome.SAVANNA;
   else if (flatness > 0.54 && humidity > 0.38) biome = Biome.MEADOW;
-  else if (humidity > 0.56) biome = Biome.FOREST;
+  else if (humidity > 0.64) biome = Biome.FOREST;
   else biome = Biome.PLAINS;
 
   return { height, biome };
@@ -178,34 +178,31 @@ function caveAt(wx: number, y: number, wz: number, seed: number) {
   return false;
 }
 
-function oreAt(wx: number, y: number, wz: number, seed: number): number {
-  const pocket = noise3(wx * 0.32, y * 0.3, wz * 0.32, seed + 4242);
-  if (pocket < 0.8) return 0;
+/* Ores: small veins. Coal is common near the top, iron is the main ore in the middle and deep,
+   gold and redstone/lapis come from deeper, diamonds only in the deepest layer, emeralds only in mountains.
+   Nothing grows on the surface. */
+function oreAt(wx: number, y: number, wz: number, seed: number, height: number, boost: boolean): number {
+  if (y < 4 || y > height - 2) return 0;
+  const vein = noise3(wx * 0.55, y * 0.55, wz * 0.55, seed + 4242);
+  if (vein < (boost ? 0.8 : 0.84)) return 0;
   const roll = hash3(wx, y, wz, seed + 31337);
-  if (y < 14) {
-    if (roll < 0.1) return B.DIAMOND;
-    if (roll < 0.2) return B.REDSTONE;
-    if (roll < 0.28) return B.LAPIS;
-    if (roll < 0.44) return B.GOLD;
-    if (roll < 0.72) return B.IRON;
+  if (height > SEA_LEVEL + 20 && y >= 40 && roll < 0.03) return B.EMERALD;
+  if (y <= 14) {
+    if (roll < 0.04) return B.DIAMOND;
+    if (roll < 0.12) return B.REDSTONE;
+    if (roll < 0.18) return B.LAPIS;
+    if (roll < 0.3) return B.GOLD;
+    if (roll < 0.7) return B.IRON;
     return B.COAL;
   }
-  if (y < 28) {
-    if (roll < 0.03) return B.DIAMOND;
-    if (roll < 0.13) return B.REDSTONE;
-    if (roll < 0.21) return B.LAPIS;
-    if (roll < 0.36) return B.GOLD;
-    if (roll < 0.68) return B.IRON;
+  if (y <= 40) {
+    if (roll < 0.06) return B.REDSTONE;
+    if (roll < 0.1) return B.LAPIS;
+    if (roll < 0.2) return B.GOLD;
+    if (roll < 0.6) return B.IRON;
     return B.COAL;
   }
-  if (y < 50) {
-    if (roll < 0.015) return B.EMERALD;
-    if (roll < 0.08) return B.GOLD;
-    if (roll < 0.4) return B.IRON;
-    return B.COAL;
-  }
-  if (roll < 0.05) return B.EMERALD;
-  if (roll < 0.24) return B.IRON;
+  if (roll < 0.35) return B.IRON;
   return B.COAL;
 }
 
@@ -280,7 +277,7 @@ export function generateChunk(
           else id = B.DIRT;
         } else {
           id = variant;
-          const ore = oreAt(wx, y, wz, seed);
+          const ore = oreAt(wx, y, wz, seed, height, opts.oreBoost);
           if (ore) id = ore;
           else if (noise3(wx * 0.09, y * 0.09, wz * 0.09, seed + 808) > 0.88) id = B.GRAVEL;
           else if (y < 20 && noise3(wx * 0.1, y * 0.12, wz * 0.1, seed + 2048) > 0.84) id = B.CLAY;
@@ -319,14 +316,6 @@ export function generateChunk(
         const r = hash2(wx * 7.3, wz * 3.1, seed + 99);
         if ((coldMode || biome === Biome.SNOWY) && blocks[blockIndex(lx, height, lz)] !== B.SNOW_GRASS && r > 0.35) {
           blocks[blockIndex(lx, surfaceY, lz)] = B.SNOW;
-        }
-        if (opts.oreBoost) {
-          const dist = Math.hypot(wx, wz);
-          if (dist < 70 && r > 0.962) {
-            const pick = hash2(wx * 1.7, wz * 9.4, seed + 1234);
-            blocks[blockIndex(lx, surfaceY, lz)] =
-              pick < 0.4 ? B.GOLD : pick < 0.62 ? B.COAL : pick < 0.82 ? B.DIAMOND : pick < 0.93 ? B.EMERALD : B.TNT;
-          }
         }
       }
     }
@@ -386,35 +375,36 @@ type TreeKind = {
 } | null;
 
 function treeAt(wx: number, wz: number, seed: number, coldMode = false): TreeKind {
+  // Only one tree can win within a 5x5 area, so trunks are always 3+ blocks apart and never merge.
+  const score = hash2(wx * 3.77, wz * 8.11, seed + 404);
+  if (score < 0.9) return null;
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dz = -2; dz <= 2; dz++) {
+      if (dx === 0 && dz === 0) continue;
+      if (hash2((wx + dx) * 3.77, (wz + dz) * 8.11, seed + 404) >= score) return null;
+    }
+  }
+
   const { height, biome } = sampleColumn(wx, wz, seed, coldMode);
   const kind = surfaceKind(biome, height);
   if (kind !== "grass" && kind !== "snow") return null;
 
-  const density = coldMode
-    ? 0.91
+  const accept = coldMode
+    ? 0.85
     : biome === Biome.FOREST
-    ? 0.88
+    ? 0.92
     : biome === Biome.TAIGA
     ? 0.9
     : biome === Biome.PLAINS
-    ? 0.984
-    : biome === Biome.MEADOW
-    ? 0.993
+    ? 0.45
     : biome === Biome.SNOWY
-    ? 0.968
+    ? 0.5
     : biome === Biome.SAVANNA
-    ? 0.978
-    : 2;
-
-  if (hash2(wx * 3.77, wz * 8.11, seed + 404) <= density) return null;
-
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dz = -1; dz <= 1; dz++) {
-      if (dx === 0 && dz === 0) continue;
-      const other = hash2((wx + dx) * 3.77, (wz + dz) * 8.11, seed + 404);
-      if (other > 0.9955 && (dx < 0 || (dx === 0 && dz < 0))) return null;
-    }
-  }
+    ? 0.35
+    : biome === Biome.MEADOW
+    ? 0.3
+    : 0;
+  if (hash2(wx * 1.9, wz * 5.3, seed + 405) > accept) return null;
 
   const spruce = coldMode || biome === Biome.TAIGA || biome === Biome.SNOWY;
   const acacia = !coldMode && biome === Biome.SAVANNA;
