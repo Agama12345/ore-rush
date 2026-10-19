@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { BLOCKS, blockIconStyle } from "../game/blocks";
+import { SWORD_MODELS } from "../game/swordModels";
 import { ITEMS, isItem } from "../game/items";
 import { t, type Lang } from "../game/i18n";
 import type { ScoreEntry } from "../types";
@@ -27,6 +28,19 @@ export function VoxelCube({ className = "" }: { className?: string }) {
 export function ToolIcon({ id, size = 30, className = "" }: { id: number; size?: number; className?: string }) {
   const item = ITEMS[id];
   if (!item) return null;
+  if (item.model) {
+    return (
+      <img
+        src={SWORD_MODELS[item.model].icon}
+        width={size}
+        height={size}
+        alt={item.name}
+        className={cx("shrink-0", className)}
+        style={{ imageRendering: "pixelated" }}
+        draggable={false}
+      />
+    );
+  }
   const color = `#${item.color.toString(16).padStart(6, "0")}`;
   const accent = `#${item.accent.toString(16).padStart(6, "0")}`;
   const handle = "#7d5a2f";

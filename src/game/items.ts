@@ -21,6 +21,8 @@ export type IconKind =
 
 export type ItemDef = {
   id: number;
+  /** key into SWORD_MODELS: drawn as a 3D model in hand and as its pre-rendered icon */
+  model?: string;
   name: string;
   kind: ToolKind | "material" | "food" | "special";
   icon: IconKind;
@@ -99,6 +101,11 @@ export const I = {
   RAW_CHICKEN: -58,
   COOKED_CHICKEN: -59,
   EGG: -60,
+  PORTAL_SWORD: -62,
+  MONKEY_SWORD: -63,
+  NEST_SWORD: -64,
+  WAX_SWORD: -65,
+  MANDRAKE_SWORD: -66,
   PUMPKIN_PIE: -61,
 } as const;
 
@@ -165,6 +172,11 @@ export const ITEMS: Record<number, ItemDef> = {
   [I.STONE_SWORD]: tool(I.STONE_SWORD, "Stone Sword", "sword", 2, 1.5, 5, 0x9aa0a2, 0x6f7578, "SWD"),
   [I.IRON_SWORD]: tool(I.IRON_SWORD, "Iron Sword", "sword", 3, 1.6, 7, 0xdadada, 0x8c8c8c, "SWD"),
   [I.DIAMOND_SWORD]: tool(I.DIAMOND_SWORD, "Diamond Sword", "sword", 4, 1.8, 10, 0x5de3e3, 0x2f9fa3, "SWD"),
+  [I.PORTAL_SWORD]: { ...tool(I.PORTAL_SWORD, "Portal Sword", "sword", 3, 1.7, 7, 0x3fb6c6, 0x7a1f1f, "SWD"), model: "portal" },
+  [I.MONKEY_SWORD]: { ...tool(I.MONKEY_SWORD, "Monkey Sword", "sword", 3, 1.7, 6, 0x4a7a3a, 0x8a6a3a, "SWD"), model: "monkey" },
+  [I.NEST_SWORD]: { ...tool(I.NEST_SWORD, "Nest Sword", "sword", 3, 1.7, 6, 0x8b5a2b, 0xf0e6d0, "SWD"), model: "nest" },
+  [I.WAX_SWORD]: { ...tool(I.WAX_SWORD, "Wax Sword", "sword", 3, 1.7, 6, 0xc9913d, 0xefe0b0, "SWD"), model: "wax" },
+  [I.MANDRAKE_SWORD]: { ...tool(I.MANDRAKE_SWORD, "Mandrake Sword", "sword", 3, 1.7, 7, 0x7a8c5a, 0x9b6b3a, "SWD"), model: "mandrake" },
   [I.WOOD_AXE]: tool(I.WOOD_AXE, "Wooden Axe", "axe", 1, 2.2, 3, 0xb98a4f, 0x7d5a2f, "AXE"),
   [I.STONE_AXE]: tool(I.STONE_AXE, "Stone Axe", "axe", 2, 3.4, 4, 0x9aa0a2, 0x6f7578, "AXE"),
   [I.IRON_AXE]: tool(I.IRON_AXE, "Iron Axe", "axe", 3, 5, 6, 0xdadada, 0x8c8c8c, "AXE"),
@@ -408,6 +420,11 @@ export const RECIPES: Recipe[] = [
   shaped("diamond-axe", I.DIAMOND_AXE, 1, ["MM", "MS", " S"], { M: I.DIAMOND, S: I.STICK }),
   shaped("diamond-shovel", I.DIAMOND_SHOVEL, 1, ["M", "S", "S"], { M: I.DIAMOND, S: I.STICK }),
   shaped("diamond-sword", I.DIAMOND_SWORD, 1, ["M", "M", "S"], { M: I.DIAMOND, S: I.STICK }),
+  shaped("portal-sword", I.PORTAL_SWORD, 1, ["G", "D", "S"], { G: I.GOLD_INGOT, D: I.DIAMOND, S: I.STICK }),
+  shaped("monkey-sword", I.MONKEY_SWORD, 1, ["L", "I", "S"], { L: B.LOG, I: I.IRON_INGOT, S: I.STICK }),
+  shaped("nest-sword", I.NEST_SWORD, 1, ["F", "P", "S"], { F: I.FEATHER, P: B.PLANKS, S: I.STICK }),
+  shaped("wax-sword", I.WAX_SWORD, 1, ["G", "G", "S"], { G: I.GOLD_INGOT, S: I.STICK }),
+  shaped("mandrake-sword", I.MANDRAKE_SWORD, 1, ["E", "I", "S"], { E: I.EGG, I: I.IRON_INGOT, S: I.STICK }),
   shaped("bow", I.BOW, 1, [" TS", "T S", " TS"], { T: I.STICK, S: I.STRING }),
   shaped("arrow", I.ARROW, 4, ["F", "S", "E"], { F: I.FLINT, S: I.STICK, E: I.FEATHER }),
 
@@ -550,7 +567,7 @@ export const CREATIVE_GROUPS: { name: string; items: number[] }[] = [
       I.DIAMOND_PICK, I.IRON_PICK, I.STONE_PICK, I.WOOD_PICK,
       I.DIAMOND_AXE, I.IRON_AXE, I.STONE_AXE, I.WOOD_AXE,
       I.DIAMOND_SHOVEL, I.IRON_SHOVEL, I.STONE_SHOVEL, I.WOOD_SHOVEL,
-      I.DIAMOND_SWORD, I.IRON_SWORD, I.STONE_SWORD, I.WOOD_SWORD,
+      I.DIAMOND_SWORD, I.PORTAL_SWORD, I.MONKEY_SWORD, I.NEST_SWORD, I.WAX_SWORD, I.MANDRAKE_SWORD, I.IRON_SWORD, I.STONE_SWORD, I.WOOD_SWORD,
       I.BOW, I.ARROW, I.FLINT_AND_STEEL, I.SHEARS,
       I.BUCKET, I.WATER_BUCKET, I.LAVA_BUCKET, I.SNOWBALL,
       I.LEATHER_COAT, I.IRON_CHESTPLATE, I.DIAMOND_CHESTPLATE,

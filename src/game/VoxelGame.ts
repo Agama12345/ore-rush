@@ -15,6 +15,7 @@ import {
   type ToolKind,
 } from "./blocks";
 import { CAMPFIRE_ELEMENTS } from "./campfire";
+import { SWORD_MODELS } from "./swordModels";
 import {
   COLD_HOTBAR,
   CREATIVE_HOTBAR,
@@ -368,6 +369,7 @@ export class VoxelGame {
   private handArm: THREE.Mesh;
   private skinTexture: THREE.CanvasTexture | null = null;
   private handShownId = Number.NaN;
+  private swordTextures = new Map<string, THREE.Texture>();
   private swing = 0;
   private swingActive = false;
 
@@ -2205,8 +2207,74 @@ export class VoxelGame {
     );
   }
 
+  /** a sword drawn from its Blockbench model (elements + texture), fitted to the hand */
+  private makeModelSword(modelKey: string) {
+    const model = SWORD_MODELS[modelKey];
+    let tex = this.swordTextures.get(modelKey);
+    if (!tex) {
+      tex = new THREE.TextureLoader().load(model.texture);
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.NearestFilter;
+      this.swordTextures.set(modelKey, tex);
+    }
+    const [tw, th] = model.size;
+    type Quad = { corners: [number, number, number][]; uvs: [number, number][]; shade: number };
+    const quads: Quad[] = [];
+    for (const el of model.elements) {
+      for (const face of MODEL_FACE_LIST) {
+        const fu = el.faces[face.name];
+        if (!fu) continue;
+        const [u1, v1, u2, v2] = fu.uv;
+        const corners = face.corners.map((key) => {
+          const p: [number, number, number] = [
+            key[0] === "1" ? el.to[0] : el.from[0],
+            key[1] === "1" ? el.to[1] : el.from[1],
+            key[2] === "1" ? el.to[2] : el.from[2],
+          ];
+          return rotateModelPoint(p, el.origin, el.rotation);
+        });
+        quads.push({ corners, uvs: [[u1, v1], [u2, v1], [u2, v2], [u1, v2]], shade: face.shade });
+      }
+    }
+    // bounds, then scale so the longest side is one hand-length
+    const min = [Infinity, Infinity, Infinity];
+    const max = [-Infinity, -Infinity, -Infinity];
+    for (const q of quads) for (const c of q.corners) for (let i = 0; i < 3; i++) {
+      min[i] = Math.min(min[i], c[i]);
+      max[i] = Math.max(max[i], c[i]);
+    }
+    const longest = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]) || 1;
+    const scale = 0.96 / longest;
+    const pos: number[] = [];
+    const uv: number[] = [];
+    const col: number[] = [];
+    const idx: number[] = [];
+    for (const q of quads) {
+      const base = pos.length / 3;
+      q.corners.forEach((c, i) => {
+        pos.push((c[0] - (min[0] + max[0]) / 2) * scale, (c[1] - min[1]) * scale - 0.34, (c[2] - (min[2] + max[2]) / 2) * scale);
+        uv.push(q.uvs[i][0] / tw, 1 - q.uvs[i][1] / th);
+        col.push(q.shade, q.shade, q.shade);
+      });
+      idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    geometry.setIndex(idx);
+    const mesh = new THREE.Mesh(
+      geometry,
+      new THREE.MeshBasicMaterial({ map: tex, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide })
+    );
+    const group = new THREE.Group();
+    group.add(mesh);
+    return group;
+  }
+
   private makeToolModel(itemId: number) {
     const item = ITEMS[itemId];
+    if (item.model) return this.makeModelSword(item.model);
     const group = new THREE.Group();
     const handle = this.makeBox(0.06, 0.52, 0.06, 0x7d5a2f, 0x9a7340);
     handle.position.set(0, -0.08, 0);

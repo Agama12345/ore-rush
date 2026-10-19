@@ -435,6 +435,11 @@ const PL_NAMES: Record<string, string> = {
   "Iron Chestplate": "Żelazny napierśnik",
   "Diamond Chestplate": "Diamentowy napierśnik",
   Campfire: "Ognisko",
+  "Portal Sword": "Miecz portalu",
+  "Monkey Sword": "Miecz małpy",
+  "Nest Sword": "Miecz gniazda",
+  "Wax Sword": "Miecz z wosku",
+  "Mandrake Sword": "Miecz mandragory",
 };
 
 export function localName(english: string) {
