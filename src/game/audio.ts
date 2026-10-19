@@ -132,7 +132,8 @@ export class SoundEngine {
     const ctx = this.ctx;
     if (!ctx) return false;
     const now = ctx.currentTime;
-    const lastTime = this.last.get(key) ?? -1;
+    // -Infinity: the very first sound of a key must always play, even at audio time ~0
+    const lastTime = this.last.get(key) ?? -Infinity;
     if (now - lastTime < gap) return false;
     this.last.set(key, now);
     return true;
