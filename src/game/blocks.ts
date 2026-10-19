@@ -489,8 +489,16 @@ const grassTop: Painter = (ctx, ox, oy, rnd) => {
 };
 
 const dirtPainter: Painter = (ctx, ox, oy, rnd) => {
-  fill(ctx, ox, oy, rnd, ["#86593a", "#976845", "#7a4f33", "#8e603f"]);
-  speckle(ctx, ox, oy, rnd, 16, ["#6e472e", "#a97851"]);
+  const clump = fbmTile(411);
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      const n = clump[y * 16 + x];
+      const shade = 0.82 + 0.34 * n + (rnd() - 0.5) * 0.12;
+      let col: RGB = [134 * shade, 94 * shade, 60 * shade];
+      if (rnd() > 0.985) col = [150, 148, 140]; // small pebble
+      px(ctx, ox, oy, x, y, rgbHex(col));
+    }
+  }
 };
 
 const overlaySide = (base: Painter, top: string[], line: string, depthBase = 3): Painter => (ctx, ox, oy, rnd) => {
@@ -502,18 +510,98 @@ const overlaySide = (base: Painter, top: string[], line: string, depthBase = 3):
   }
 };
 
-const stonePainter: Painter = (ctx, ox, oy, rnd) => {
-  fill(ctx, ox, oy, rnd, ["#7f878c", "#8b9499", "#767e83", "#90999e", "#828a8f"]);
-  for (let i = 0; i < 7; i++) {
-    const x = Math.floor(rnd() * 16);
-    let y = Math.floor(rnd() * 16);
-    const len = 2 + Math.floor(rnd() * 3);
-    for (let j = 0; j < len; j++) {
-      px(ctx, ox, oy, (x + j) % 16, y, "#697176");
-      if (rnd() > 0.6) y = (y + 1) % 16;
+
+/* ---- realistic procedural textures (tileable value noise + voronoi stones) ---- */
+type RGB = [number, number, number];
+const rgbHex = (c: RGB) => "#" + c.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
+const mixRGB = (a: RGB, b: RGB, t: number): RGB => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const smooth01 = (t: number) => t * t * (3 - 2 * t);
+
+/* tileable value noise on a 16x16 grid with `cells` lattice points per side */
+const tileNoise = (seed: number, cells: number): Float32Array => {
+  const r = makeRng(seed);
+  const lat = new Float32Array(cells * cells);
+  for (let i = 0; i < lat.length; i++) lat[i] = r();
+  const out = new Float32Array(256);
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      const fx = (x / 16) * cells;
+      const fy = (y / 16) * cells;
+      const x0 = Math.floor(fx) % cells;
+      const y0 = Math.floor(fy) % cells;
+      const x1 = (x0 + 1) % cells;
+      const y1 = (y0 + 1) % cells;
+      const tx = smooth01(fx - Math.floor(fx));
+      const ty = smooth01(fy - Math.floor(fy));
+      const top = lat[y0 * cells + x0] + (lat[y0 * cells + x1] - lat[y0 * cells + x0]) * tx;
+      const bot = lat[y1 * cells + x0] + (lat[y1 * cells + x1] - lat[y1 * cells + x0]) * tx;
+      out[y * 16 + x] = top + (bot - top) * ty;
     }
   }
-  speckle(ctx, ox, oy, rnd, 5, ["#a0a8ac"]);
+  return out;
+};
+/* three octaves, normalised to 0..1 */
+const fbmTile = (seed: number): Float32Array => {
+  const a = tileNoise(seed, 2);
+  const b = tileNoise(seed + 1, 4);
+  const c = tileNoise(seed + 2, 8);
+  const out = new Float32Array(256);
+  for (let i = 0; i < 256; i++) out[i] = a[i] * 0.5 + b[i] * 0.3 + c[i] * 0.2;
+  return out;
+};
+
+/* voronoi stones: jittered cells with darker mortar on the borders (tileable) */
+const voronoiPainter = (cells: number, base: RGB[], mortar: RGB, edgeWidth: number, seed: number): Painter => (ctx, ox, oy, rnd) => {
+  const size = 16 / cells;
+  const centers: { x: number; y: number; tone: number }[] = [];
+  for (let gy = 0; gy < cells; gy++) {
+    for (let gx = 0; gx < cells; gx++) {
+      centers.push({ x: (gx + 0.2 + 0.6 * rnd()) * size, y: (gy + 0.2 + 0.6 * rnd()) * size, tone: rnd() });
+    }
+  }
+  const wrap = (d: number) => Math.min(Math.abs(d), 16 - Math.abs(d));
+  const grain = fbmTile(seed);
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      let d1 = Infinity, d2 = Infinity, i1 = 0;
+      for (let i = 0; i < centers.length; i++) {
+        const dx = wrap(x + 0.5 - centers[i].x);
+        const dy = wrap(y + 0.5 - centers[i].y);
+        const d = Math.hypot(dx, dy);
+        if (d < d1) { d2 = d1; d1 = d; i1 = i; } else if (d < d2) d2 = d;
+      }
+      const edge = d2 - d1;
+      const tone = centers[i1].tone;
+      const baseCol = base[Math.floor(tone * base.length) % base.length];
+      const shade = 0.9 + 0.2 * grain[y * 16 + x] + (rnd() - 0.5) * 0.08;
+      let col: RGB = [baseCol[0] * shade, baseCol[1] * shade, baseCol[2] * shade];
+      if (edge < edgeWidth) col = mixRGB(mortar, col, Math.max(0, Math.min(1, edge / edgeWidth)) * 0.6);
+      px(ctx, ox, oy, x, y, rgbHex(col));
+    }
+  }
+};
+
+const stonePainter: Painter = (ctx, ox, oy, rnd) => {
+  const grain = fbmTile(301);
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      const n = grain[y * 16 + x];
+      const shade = 0.84 + 0.3 * n + (rnd() - 0.5) * 0.08;
+      px(ctx, ox, oy, x, y, rgbHex([124 * shade, 131 * shade, 135 * shade]));
+    }
+  }
+  // thin cracks: short dark random walks
+  for (let c = 0; c < 2; c++) {
+    let x = Math.floor(rnd() * 16);
+    let y = Math.floor(rnd() * 16);
+    for (let j = 0; j < 6; j++) {
+      px(ctx, ox, oy, x, y, "#5c6469");
+      x = (x + (rnd() > 0.5 ? 1 : 0)) % 16;
+      y = (y + (rnd() > 0.35 ? 1 : 0)) % 16;
+    }
+  }
+  // light mineral flecks and a few dark pits
+  for (let i = 0; i < 9; i++) px(ctx, ox, oy, Math.floor(rnd() * 16), Math.floor(rnd() * 16), rnd() > 0.5 ? "#a9b0b4" : "#6c7479");
 };
 
 const orePainter = (colors: [string, string, string], small = false): Painter => (ctx, ox, oy, rnd) => {
@@ -932,10 +1020,19 @@ PAINTERS[T.GRASS_SIDE] = overlaySide(dirtPainter, ["#67a646", "#71b34c", "#5c983
 PAINTERS[T.DIRT] = dirtPainter;
 PAINTERS[T.STONE] = stonePainter;
 PAINTERS[T.COBBLE] = cobblePainter;
-PAINTERS[T.SAND] = plainTex(["#dfcb95", "#e8d6a3", "#d4bf88", "#ecdcac"], 16, ["#c6b07a", "#f4e7bd"]);
+PAINTERS[T.SAND] = (ctx, ox, oy, rnd) => {
+  const grain = fbmTile(523);
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      const ripple = 1 + 0.05 * Math.sin(x * 0.7 + y * 0.3 + grain[y * 16 + x] * 4);
+      const shade = ripple * (0.96 + 0.06 * grain[y * 16 + x]) + (rnd() - 0.5) * 0.04;
+      px(ctx, ox, oy, x, y, rgbHex([222 * shade, 205 * shade, 150 * shade]));
+    }
+  }
+};
 PAINTERS[T.SANDSTONE_TOP] = sandstoneTop;
 PAINTERS[T.SANDSTONE_SIDE] = sandstoneSide;
-PAINTERS[T.GRAVEL] = plainTex(["#8d8984", "#9a958f", "#7e7a75", "#a7a29b"], 30, ["#6d6a65", "#b5b0a8"]);
+PAINTERS[T.GRAVEL] = voronoiPainter(8, [[142, 137, 130], [120, 116, 110], [163, 158, 150], [104, 100, 96]], [70, 66, 62], 0.7, 607);
 PAINTERS[T.LOG_SIDE] = logSidePainter(["#795231", "#855b36", "#6c482b", "#8d613a"], "#654327", "#a97a49");
 PAINTERS[T.LOG_TOP] = logTopPainter(["#b68a55", "#c1955f", "#a87c4b"], "#8b6238", "#6f4a28");
 PAINTERS[T.LEAVES] = leavesPainter(["#356b30", "#3f7c37", "#2c5c2a", "#4a8a3e"], "#224a21", "#579b45");
