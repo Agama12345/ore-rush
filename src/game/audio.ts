@@ -493,7 +493,8 @@ export class SoundEngine {
     const bp = ctx.createBiquadFilter();
     bp.type = "bandpass";
     bp.frequency.setValueAtTime(freq * (0.97 + Math.random() * 0.06), t0);
-    bp.Q.value = q;
+    // low Q = broadband thud/crunch; high Q makes a pitched ring (metallic), so keep it only for glass and metal
+    bp.Q.value = Math.max(0.5, q * 0.08);
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t0);
     // narrow bandpass removes most energy, so the body is driven harder
@@ -532,8 +533,8 @@ export class SoundEngine {
         this.click(0.04, 0, 2400 * k);
         break;
       case "stone":
-        this.click(0.09, 0, 4000 * k);
-        this.ring(900 * k, 0.05, 0.05, 0, 10);
+        this.click(0.09, 0, 1800 * k);
+        this.ring(500 * k, 0.05, 0.05, 0, 8);
         this.ring(160 * k, 0.07, 0.05, 0, 4);
         break;
       case "metal":
@@ -548,7 +549,7 @@ export class SoundEngine {
         break;
       case "glass":
         this.ring(2600 * k, 0.25, 0.04, 0, 30);
-        this.click(0.03, 0, 5000);
+        this.click(0.03, 0, 3000);
         break;
       case "wool":
         this.ring(300 * k, 0.1, 0.08, 0, 3);
@@ -563,16 +564,16 @@ export class SoundEngine {
     const k = 0.9 + Math.random() * 0.2;
     switch (mat) {
       case "stone":
-        this.click(0.2, 0, 3000 * k);
-        this.ring(1500 * k, 0.08, 0.1, 0, 20);
+        this.click(0.2, 0, 1600 * k);
+        this.ring(900 * k, 0.08, 0.1, 0, 14);
         this.ring(700 * k, 0.05, 0.05, 0, 10);
         break;
       case "metal":
         this.click(0.15, 0, 4000 * k);
-        this.ring(2000 * k, 0.15, 0.08, 0, 30);
+        this.ring(1300 * k, 0.15, 0.08, 0, 20);
         break;
       case "wood":
-        this.click(0.16, 0, 2200 * k);
+        this.click(0.16, 0, 1300 * k);
         this.ring(450 * k, 0.12, 0.13, 0, 12);
         break;
       case "sand":
@@ -598,7 +599,7 @@ export class SoundEngine {
     const k = 0.92 + Math.random() * 0.16;
     switch (mat) {
       case "stone":
-        this.click(0.22, 0, 3000 * k);
+        this.click(0.22, 0, 1500 * k);
         this.crumble(5, 0.14, 0.22, 1700 * k);
         this.ring(180 * k, 0.22, 0.22, 0, 5);
         if (ore) {
@@ -608,11 +609,11 @@ export class SoundEngine {
         break;
       case "metal":
         this.click(0.25, 0, 3500 * k);
-        this.ring(1100 * k, 0.4, 0.12, 0, 20);
-        this.ring(2100 * k, 0.25, 0.05, 0.02, 25);
+        this.ring(700 * k, 0.4, 0.12, 0, 16);
+        this.ring(1400 * k, 0.25, 0.05, 0.02, 20);
         break;
       case "wood":
-        this.click(0.3, 0, 1800 * k);
+        this.click(0.3, 0, 1100 * k);
         this.ring(300 * k, 0.25, 0.22, 0, 9);
         this.ring(520 * k, 0.12, 0.1, 0.02, 12);
         this.noise(0.18, 0.1, 3000 * k, "bandpass", 0.03, 1);
@@ -643,12 +644,12 @@ export class SoundEngine {
     const k = 0.92 + Math.random() * 0.16;
     switch (mat) {
       case "wood":
-        this.click(0.12, 0, 1800 * k);
+        this.click(0.12, 0, 1100 * k);
         this.ring(380 * k, 0.1, 0.14, 0, 10);
         break;
       case "stone":
       case "metal":
-        this.click(0.14, 0, 2500 * k);
+        this.click(0.14, 0, 1400 * k);
         this.ring(600 * k, 0.08, 0.1, 0, 12);
         break;
       case "glass":
