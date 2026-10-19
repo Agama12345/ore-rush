@@ -480,129 +480,184 @@ export class SoundEngine {
    *  Material-aware Footsteps, Mining, Breaking & Placing
    * ===================================================================== */
 
+  /* Realistic material sounds: a sharp impact transient, a resonant body
+   * (narrow bandpass noise with exponential decay) and small crumbling bursts.
+   * No square/triangle "blip" tones. */
+  private ring(freq: number, decay: number, vol: number, delay = 0, q = 18) {
+    const ctx = this.ensure();
+    if (!ctx || !this.dry || !this.noiseBuffer) return;
+    const t0 = ctx.currentTime + delay;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    src.playbackRate.value = 0.9 + Math.random() * 0.2;
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.setValueAtTime(freq * (0.97 + Math.random() * 0.06), t0);
+    bp.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    // narrow bandpass removes most energy, so the body is driven harder
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol * 8), t0 + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + decay);
+    src.connect(bp).connect(g).connect(this.dry);
+    if (this.reverbSend) g.connect(this.reverbSend);
+    src.start(t0, Math.random() * 0.4);
+    src.stop(t0 + decay + 0.05);
+  }
+
+  /* sharp transient, a few milliseconds long */
+  private click(vol: number, delay = 0, freq = 3000) {
+    this.noise(0.008, vol, freq, "highpass", delay, 0.7);
+  }
+
+  /* several small crumbling bursts spread over `spread` seconds */
+  private crumble(count: number, vol: number, spread: number, freq: number) {
+    for (let i = 0; i < count; i++) {
+      const d = Math.random() * spread;
+      this.noise(0.02 + Math.random() * 0.03, vol * (0.6 + Math.random() * 0.4), freq * (0.8 + Math.random() * 0.4), "bandpass", d, 0.9);
+    }
+  }
+
   step(mat: Material) {
     if (!this.throttle("step", 0.15)) return;
-    const detune = 0.9 + Math.random() * 0.2;
-
+    const k = 0.92 + Math.random() * 0.16;
     switch (mat) {
       case "grass":
       case "plant":
-        this.noise(0.08, 0.22, 1400 * detune, "lowpass", 0, 0.8, true);
-        this.noise(0.04, 0.12, 3200 * detune, "bandpass", 0, 1.5);
+        this.noise(0.12, 0.09, 2600 * k, "bandpass", 0, 0.6);
+        this.ring(170 * k, 0.07, 0.05, 0, 4);
         break;
       case "wood":
-        this.tone(160 * detune, 0.07, { type: "triangle", vol: 0.22, slide: 90 * detune });
-        this.noise(0.06, 0.14, 950 * detune, "bandpass", 0, 1.2);
+        this.ring(260 * k, 0.12, 0.10, 0, 7);
+        this.click(0.04, 0, 2400 * k);
         break;
       case "stone":
+        this.click(0.09, 0, 4000 * k);
+        this.ring(900 * k, 0.05, 0.05, 0, 10);
+        this.ring(160 * k, 0.07, 0.05, 0, 4);
+        break;
       case "metal":
-        this.tone(140 * detune, 0.05, { type: "square", vol: 0.12, slide: 80 });
-        this.noise(0.05, 0.2, 1600 * detune, "bandpass", 0, 1.8);
+        this.ring(1200 * k, 0.25, 0.05, 0, 25);
+        this.ring(2300 * k, 0.14, 0.02, 0, 25);
+        this.click(0.03, 0, 3500);
         break;
       case "sand":
       case "snow":
-        this.noise(0.09, 0.2, 1100 * detune, "lowpass", 0, 0.7, true);
-        this.noise(0.05, 0.15, 2600 * detune, "bandpass", 0, 1.0);
+      case "gravel":
+        this.crumble(4, 0.12, 0.05, 1800 * k);
         break;
       case "glass":
-        this.tone(480 * detune, 0.05, { type: "sine", vol: 0.14, slide: 280 });
-        this.noise(0.04, 0.12, 3800 * detune, "highpass");
+        this.ring(2600 * k, 0.25, 0.04, 0, 30);
+        this.click(0.03, 0, 5000);
         break;
       case "wool":
-        this.noise(0.08, 0.16, 650 * detune, "lowpass", 0, 0.5, true);
-        break;
-      case "liquid":
-        this.noise(0.12, 0.18, 900, "lowpass", 0, 0.8);
-        this.tone(320 + Math.random() * 120, 0.08, { type: "sine", vol: 0.06, slide: 180 });
+        this.ring(300 * k, 0.1, 0.08, 0, 3);
         break;
       default:
-        this.noise(0.06, 0.16, 1200 * detune, "lowpass");
+        this.ring(200 * k, 0.1, 0.07, 0, 4);
     }
   }
 
   mine(mat: Material) {
     if (!this.throttle("mine", 0.16)) return;
-    const detune = 0.88 + Math.random() * 0.24;
-
+    const k = 0.9 + Math.random() * 0.2;
     switch (mat) {
       case "stone":
+        this.click(0.2, 0, 3000 * k);
+        this.ring(1500 * k, 0.08, 0.1, 0, 20);
+        this.ring(700 * k, 0.05, 0.05, 0, 10);
+        break;
       case "metal":
-        this.tone(180 * detune, 0.06, { type: "square", vol: 0.18, slide: 95 * detune });
-        this.noise(0.05, 0.22, 1800 * detune, "bandpass", 0, 2.2);
+        this.click(0.15, 0, 4000 * k);
+        this.ring(2000 * k, 0.15, 0.08, 0, 30);
         break;
       case "wood":
-        this.tone(190 * detune, 0.08, { type: "triangle", vol: 0.25, slide: 110 * detune });
-        this.noise(0.06, 0.16, 1100 * detune, "bandpass", 0, 1.4);
+        this.click(0.16, 0, 2200 * k);
+        this.ring(450 * k, 0.12, 0.13, 0, 12);
+        break;
+      case "sand":
+      case "snow":
+      case "gravel":
+        this.crumble(3, 0.1, 0.04, 1600 * k);
         break;
       case "grass":
       case "plant":
-      case "sand":
-      case "snow":
-        this.noise(0.07, 0.2, 1400 * detune, "lowpass", 0, 0.9, true);
+        this.noise(0.06, 0.12, 2200 * k, "bandpass", 0, 0.7);
         break;
       case "glass":
-        this.tone(620 * detune, 0.06, { type: "sine", vol: 0.15, slide: 380 });
-        this.noise(0.05, 0.18, 4200 * detune, "highpass");
+        this.ring(3500 * k, 0.3, 0.07, 0, 30);
+        this.click(0.06, 0, 5000);
         break;
       default:
-        this.noise(0.06, 0.18, 1200, "bandpass");
+        this.click(0.12, 0, 2000 * k);
+        this.ring(350 * k, 0.08, 0.1, 0, 8);
     }
   }
 
   broke(mat: Material, ore = false) {
-    const detune = 0.92 + Math.random() * 0.16;
-
+    const k = 0.92 + Math.random() * 0.16;
     switch (mat) {
       case "stone":
-      case "metal":
-        this.tone(120 * detune, 0.18, { type: "square", vol: 0.28, slide: 55 });
-        this.noise(0.18, 0.35, 1200 * detune, "lowpass", 0, 1.2);
+        this.click(0.22, 0, 3000 * k);
+        this.crumble(5, 0.14, 0.22, 1700 * k);
+        this.ring(180 * k, 0.22, 0.22, 0, 5);
         if (ore) {
-          this.tone(780 * detune, 0.18, { type: "triangle", vol: 0.18, slide: 1100 });
-          this.tone(1170 * detune, 0.22, { type: "sine", vol: 0.12, delay: 0.04 });
+          this.ring(1800 * k, 0.25, 0.05, 0.03, 30);
+          this.ring(2900 * k, 0.18, 0.03, 0.06, 30);
         }
         break;
+      case "metal":
+        this.click(0.25, 0, 3500 * k);
+        this.ring(1100 * k, 0.4, 0.12, 0, 20);
+        this.ring(2100 * k, 0.25, 0.05, 0.02, 25);
+        break;
       case "wood":
-        this.tone(150 * detune, 0.16, { type: "triangle", vol: 0.3, slide: 75 });
-        this.noise(0.16, 0.3, 850 * detune, "lowpass", 0, 1.0);
+        this.click(0.3, 0, 1800 * k);
+        this.ring(300 * k, 0.25, 0.22, 0, 9);
+        this.ring(520 * k, 0.12, 0.1, 0.02, 12);
+        this.noise(0.18, 0.1, 3000 * k, "bandpass", 0.03, 1);
         break;
       case "glass":
-        this.noise(0.24, 0.35, 5200, "highpass", 0, 1.2);
-        [1400, 2100, 2900].forEach((f, idx) => {
-          this.tone(f * detune, 0.14, { type: "sine", vol: 0.1, delay: idx * 0.03, slide: f * 0.6 });
-        });
+        this.noise(0.35, 0.22, 6000, "highpass", 0, 0.8);
+        this.ring(2800 * k, 0.5, 0.07, 0, 30);
+        this.ring(3900 * k, 0.4, 0.05, 0.02, 30);
+        this.ring(5200 * k, 0.3, 0.03, 0.05, 30);
         break;
       case "grass":
       case "plant":
+        this.noise(0.15, 0.18, 2000 * k, "bandpass", 0, 0.7);
+        break;
       case "sand":
       case "snow":
-        this.noise(0.15, 0.28, 1100 * detune, "lowpass", 0, 0.8, true);
+      case "gravel":
+        this.crumble(8, 0.16, 0.2, 1600 * k);
         break;
       default:
-        this.noise(0.15, 0.28, 1000, "lowpass");
+        this.noise(0.2, 0.22, 800 * k, "lowpass", 0, 0.8);
+        this.ring(200 * k, 0.2, 0.15, 0, 5);
     }
   }
 
   place(mat: Material) {
     if (!this.throttle("place", 0.06)) return;
-    const detune = 0.92 + Math.random() * 0.16;
-
+    const k = 0.92 + Math.random() * 0.16;
     switch (mat) {
       case "wood":
-        this.tone(210 * detune, 0.09, { type: "triangle", vol: 0.24, slide: 120 });
-        this.noise(0.06, 0.14, 1200 * detune, "bandpass");
+        this.click(0.12, 0, 1800 * k);
+        this.ring(380 * k, 0.1, 0.14, 0, 10);
         break;
       case "stone":
       case "metal":
-        this.tone(160 * detune, 0.08, { type: "square", vol: 0.18, slide: 90 });
-        this.noise(0.06, 0.18, 1600 * detune, "bandpass");
+        this.click(0.14, 0, 2500 * k);
+        this.ring(600 * k, 0.08, 0.1, 0, 12);
         break;
       case "glass":
-        this.tone(520 * detune, 0.07, { type: "sine", vol: 0.16, slide: 320 });
-        this.noise(0.05, 0.14, 3600, "highpass");
+        this.ring(3000 * k, 0.2, 0.06, 0, 30);
+        this.click(0.06, 0, 4500);
         break;
       default:
-        this.noise(0.08, 0.22, 1200 * detune, "lowpass", 0, 0.8, true);
+        this.ring(160 * k, 0.1, 0.14, 0, 4);
+        this.noise(0.05, 0.08, 1500 * k, "bandpass", 0, 0.8);
     }
   }
 
