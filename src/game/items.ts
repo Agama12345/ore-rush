@@ -99,6 +99,7 @@ export const I = {
   RAW_CHICKEN: -58,
   COOKED_CHICKEN: -59,
   EGG: -60,
+  PUMPKIN_PIE: -61,
 } as const;
 
 const tool = (
@@ -215,6 +216,7 @@ export const ITEMS: Record<number, ItemDef> = {
   [I.MELON_SLICE]: food(I.MELON_SLICE, "Melon Slice", "food", 0xd2342b, 0x6f9c2b, 2, 1),
   [I.RAW_CHICKEN]: food(I.RAW_CHICKEN, "Raw Chicken", "meat", 0xf3c9b4, 0xe0a88e, 2, 0),
   [I.COOKED_CHICKEN]: food(I.COOKED_CHICKEN, "Cooked Chicken", "meat", 0xc98a4a, 0xe7b57a, 6, 4),
+  [I.PUMPKIN_PIE]: food(I.PUMPKIN_PIE, "Pumpkin Pie", "food", 0xc8782a, 0xf0b060, 8, 0),
   [I.EGG]: material(I.EGG, "Egg", "nugget", 0xf2e6cf, 0xffffff),
 };
 
@@ -362,6 +364,8 @@ export const RECIPES: Recipe[] = [
   shapeless("planks-oak", B.PLANKS, 4, [B.LOG]),
   shapeless("planks-birch", B.PLANKS, 4, [B.BIRCH_LOG]),
   shapeless("planks-spruce", B.PLANKS, 4, [B.SPRUCE_LOG]),
+  shapeless("spruce-planks", B.SPRUCE_PLANKS, 4, [B.SPRUCE_LOG, B.SPRUCE_LOG]),
+  shapeless("pumpkin-pie", I.PUMPKIN_PIE, 1, [B.PUMPKIN, I.EGG]),
   shapeless("planks-jungle", B.PLANKS, 4, [B.JUNGLE_LOG]),
   shapeless("planks-acacia", B.PLANKS, 4, [B.ACACIA_LOG]),
   shaped("stick", I.STICK, 4, ["P", "P"], { P: B.PLANKS }),
@@ -581,7 +585,7 @@ export const CREATIVE_GROUPS: { name: string; items: number[] }[] = [
   {
     name: "Build",
     items: [
-      B.CAMPFIRE, B.TORCH, B.GLOWSTONE, B.FURNACE, B.CRAFTING, B.CHEST, B.BED, B.COAL_BLOCK, B.BOOKSHELF,
+      B.CAMPFIRE, B.TORCH, B.GLOWSTONE, B.FURNACE, B.CRAFTING, B.CHEST, B.BED, B.COAL_BLOCK, B.SPRUCE_PLANKS, B.BOOKSHELF,
       B.BRICKS, B.STONE_BRICKS, B.MOSSY, B.GLASS, B.TNT,
       B.WOOL_WHITE, B.WOOL_RED, B.WOOL_BLUE, B.WOOL_YELLOW, B.WOOL_GREEN, B.WOOL_BLACK,
       B.WOOL_ORANGE, B.WOOL_PINK, B.WOOL_CYAN, B.WOOL_PURPLE,
@@ -590,7 +594,7 @@ export const CREATIVE_GROUPS: { name: string; items: number[] }[] = [
   {
     name: "Food",
     items: [
-      I.APPLE, I.BREAD, I.COOKED_PORK, I.STEAK, I.COOKED_CHICKEN,
+      I.APPLE, I.BREAD, I.PUMPKIN_PIE, I.COOKED_PORK, I.STEAK, I.COOKED_CHICKEN,
       I.RAW_PORK, I.RAW_BEEF, I.RAW_CHICKEN, I.MELON_SLICE,
       I.EGG, I.WHEAT, I.STICK, I.STRING, I.FEATHER, I.LEATHER, I.FLINT, I.BONE, I.CLAY_BALL, I.BRICK,
     ],

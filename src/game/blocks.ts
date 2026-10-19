@@ -89,6 +89,7 @@ export const B = {
   BLUE_ICE: 81,
   BED: 82,
   COAL_BLOCK: 83,
+  SPRUCE_PLANKS: 84,
 } as const;
 
 /* ------------------------------------------------------------------ *
@@ -200,6 +201,7 @@ export const T = {
   BED_TOP: 102,
   BED_SIDE: 103,
   COAL_BLOCK_TILE: 104,
+  SPRUCE_PLANKS_TILE: 105,
 } as const;
 
 export type ToolKind = "none" | "pickaxe" | "axe" | "shovel" | "sword" | "bow";
@@ -368,6 +370,7 @@ export const BLOCKS: Record<number, BlockDef> = {
   [B.TERRACOTTA]: def({ id: B.TERRACOTTA, name: "Terracotta", color: 0x9a5a3c, hardness: 0.7, score: 6, tool: "pickaxe" }, { top: T.TERRACOTTA }),
   [B.NETHERRACK]: def({ id: B.NETHERRACK, name: "Netherrack", color: 0x723636, hardness: 0.25, score: 4, tool: "pickaxe" }, { top: T.NETHERRACK }),
   [B.COAL_BLOCK]: def({ id: B.COAL_BLOCK, name: "Coal Block", color: 0x2a2a2a, hardness: 5, score: 8, tool: "pickaxe" }, { top: T.COAL_BLOCK_TILE }),
+  [B.SPRUCE_PLANKS]: def({ id: B.SPRUCE_PLANKS, name: "Spruce Planks", color: 0x6e4a2a, hardness: 0.42, score: 5, tool: "axe" }, { top: T.SPRUCE_PLANKS_TILE }),
   [B.BED]: def({ id: B.BED, name: "Bed", color: 0xb83b3b, hardness: 0.3, score: 6, tool: "axe" }, { top: T.BED_TOP, side: T.BED_SIDE }),
 };export const ORE_IDS = [B.COAL, B.IRON, B.GOLD, B.REDSTONE, B.LAPIS, B.DIAMOND, B.EMERALD];
 
@@ -937,6 +940,7 @@ PAINTERS[T.LOG_SIDE] = logSidePainter(["#795231", "#855b36", "#6c482b", "#8d613a
 PAINTERS[T.LOG_TOP] = logTopPainter(["#b68a55", "#c1955f", "#a87c4b"], "#8b6238", "#6f4a28");
 PAINTERS[T.LEAVES] = leavesPainter(["#356b30", "#3f7c37", "#2c5c2a", "#4a8a3e"], "#224a21", "#579b45");
 PAINTERS[T.PLANKS] = planksPainter(["#b8894f", "#c4955a", "#ac7e46", "#bd8d53"], "#7f5a31", "#d7a76a");
+PAINTERS[T.SPRUCE_PLANKS_TILE] = planksPainter(["#7a5530", "#86603a", "#6e4a28", "#7f5833"], "#4a3019", "#9a6e42");
 PAINTERS[T.BEDROCK] = plainTex(["#3f4245", "#4a4d50", "#35383b", "#575b5e"], 26, ["#26292c", "#666a6d"]);
 PAINTERS[T.WATER] = waterPainter;
 PAINTERS[T.COAL] = orePainter(["#2c2f33", "#43484d", "#6a7075"], true);
