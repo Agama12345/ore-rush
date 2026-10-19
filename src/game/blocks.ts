@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { CAMPFIRE_PALETTE, CAMPFIRE_ROWS } from "./campfire";
 
 /* ------------------------------------------------------------------ *
  *  Block ids
@@ -202,12 +203,18 @@ export const T = {
   BED_SIDE: 103,
   COAL_BLOCK_TILE: 104,
   SPRUCE_PLANKS_TILE: 105,
+  CAMPFIRE_MODEL_TL: 130,
+  CAMPFIRE_MODEL_TR: 131,
+  CAMPFIRE_MODEL_BL: 142,
+  CAMPFIRE_MODEL_BR: 143,
 } as const;
 
 export type ToolKind = "none" | "pickaxe" | "axe" | "shovel" | "sword" | "bow";
 
 export type BlockDef = {
   id: number;
+  /** drawn as a small 3D model from campfire.ts instead of a cube */
+  model?: boolean;
   name: string;
   top: number;
   bottom: number;
@@ -348,7 +355,7 @@ export const BLOCKS: Record<number, BlockDef> = {
   [B.WOOL_PINK]: def({ id: B.WOOL_PINK, name: "Pink Wool", color: 0xed8dac, hardness: 0.25, score: 5 }, { top: T.WOOL_PINK }),
   [B.WOOL_CYAN]: def({ id: B.WOOL_CYAN, name: "Cyan Wool", color: 0x169b9c, hardness: 0.25, score: 5 }, { top: T.WOOL_CYAN }),
   [B.WOOL_PURPLE]: def({ id: B.WOOL_PURPLE, name: "Purple Wool", color: 0x7b2fbe, hardness: 0.25, score: 5 }, { top: T.WOOL_PURPLE }),
-  [B.CAMPFIRE]: def({ id: B.CAMPFIRE, name: "Campfire", color: 0xe87b1a, hardness: 0.5, score: 10, tool: "axe", emissive: true, glow: 0xffcf6b, replaceable: false, creative: true }, { top: T.CAMPFIRE_TOP, side: T.CAMPFIRE_SIDE }),
+  [B.CAMPFIRE]: def({ id: B.CAMPFIRE, name: "Campfire", color: 0xe87b1a, hardness: 0.5, score: 10, tool: "axe", emissive: true, glow: 0xffcf6b, replaceable: false, creative: true, model: true, transparent: true }, { top: T.CAMPFIRE_MODEL_TL, side: T.CAMPFIRE_MODEL_TL }),
 
   /* plants */
   [B.TALL_GRASS]: plant(B.TALL_GRASS, "Tall Grass", 0x6cb24c, T.TALL_GRASS),
@@ -1037,6 +1044,26 @@ PAINTERS[T.LOG_SIDE] = logSidePainter(["#795231", "#855b36", "#6c482b", "#8d613a
 PAINTERS[T.LOG_TOP] = logTopPainter(["#b68a55", "#c1955f", "#a87c4b"], "#8b6238", "#6f4a28");
 PAINTERS[T.LEAVES] = leavesPainter(["#356b30", "#3f7c37", "#2c5c2a", "#4a8a3e"], "#224a21", "#579b45");
 PAINTERS[T.PLANKS] = planksPainter(["#b8894f", "#c4955a", "#ac7e46", "#bd8d53"], "#7f5a31", "#d7a76a");
+/* campfire model texture: frame 0 of the Blockbench texture, split over four atlas tiles */
+const campfirePixel = (x: number, y: number): [number, number, number, number] | null => {
+  const ch = CAMPFIRE_ROWS[y]?.[x];
+  if (!ch || ch === ".") return null;
+  return CAMPFIRE_PALETTE[ch] ?? null;
+};
+const campfireQuadPainter = (qx: number, qy: number): Painter => (ctx, ox, oy) => {
+  for (let y = 0; y < TS; y++) {
+    for (let x = 0; x < TS; x++) {
+      const c = campfirePixel(qx * TS + x, qy * TS + y);
+      if (!c) continue;
+      ctx.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${c[3] / 255})`;
+      ctx.fillRect(ox + x, oy + y, 1, 1);
+    }
+  }
+};
+PAINTERS[T.CAMPFIRE_MODEL_TL] = campfireQuadPainter(0, 0);
+PAINTERS[T.CAMPFIRE_MODEL_TR] = campfireQuadPainter(1, 0);
+PAINTERS[T.CAMPFIRE_MODEL_BL] = campfireQuadPainter(0, 1);
+PAINTERS[T.CAMPFIRE_MODEL_BR] = campfireQuadPainter(1, 1);
 PAINTERS[T.SPRUCE_PLANKS_TILE] = planksPainter(["#7a5530", "#86603a", "#6e4a28", "#7f5833"], "#4a3019", "#9a6e42");
 PAINTERS[T.BEDROCK] = plainTex(["#3f4245", "#4a4d50", "#35383b", "#575b5e"], 26, ["#26292c", "#666a6d"]);
 PAINTERS[T.WATER] = waterPainter;
@@ -1264,11 +1291,22 @@ PAINTERS[T.CAMPFIRE_SIDE] = (ctx, ox, oy, rnd) => {
 const TRANSPARENT_TILES = new Set<number>([
   T.TALL_GRASS, T.POPPY, T.DANDELION, T.CORNFLOWER, T.MUSH_RED, T.MUSH_BROWN, T.DEAD_BUSH, T.SAPLING, T.TORCH,
   T.LEAVES, T.BIRCH_LEAVES, T.SPRUCE_LEAVES, T.JUNGLE_LEAVES, T.ACACIA_LEAVES, T.SUGAR_CANE, T.LILY, T.COBWEB, T.GLASS, T.PACKED_ICE_TILE, T.BLUE_ICE_TILE,
+  T.CAMPFIRE_MODEL_TL, T.CAMPFIRE_MODEL_TR, T.CAMPFIRE_MODEL_BL, T.CAMPFIRE_MODEL_BR,
 ]);
 
 type Atlas = { canvas: HTMLCanvasElement; url: string };
 let cachedAtlas: Atlas | null = null;
 const uvCache = new Map<number, [number, number, number, number]>();
+
+/* where the campfire model's 32x32 texture sits in the atlas (top-left pixel) */
+export const CAMPFIRE_ATLAS = {
+  x: (T.CAMPFIRE_MODEL_TL % COLS) * TS,
+  y: Math.floor(T.CAMPFIRE_MODEL_TL / COLS) * TS,
+};
+/** atlas pixel -> texture coordinates (canvas row 0 is the top, which is v = 1) */
+export function atlasUV(px: number, py: number): [number, number] {
+  return [px / ATLAS_SIZE, 1 - py / ATLAS_SIZE];
+}
 
 function paintAtlas(): Atlas {
   const canvas = document.createElement("canvas");

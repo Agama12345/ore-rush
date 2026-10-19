@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import {
+  atlasUV,
   B,
   BLOCKS,
+  CAMPFIRE_ATLAS,
   getAtlas,
   isCross,
   isLiquid,
@@ -12,6 +14,7 @@ import {
   tileUV,
   type ToolKind,
 } from "./blocks";
+import { CAMPFIRE_ELEMENTS } from "./campfire";
 import {
   COLD_HOTBAR,
   CREATIVE_HOTBAR,
@@ -278,6 +281,31 @@ type VoxelHit = { x: number; y: number; z: number; nx: number; ny: number; nz: n
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const hexColor = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
+
+/* ---- 3D block models (campfire) ---- */
+/* corner keys: x/y/z = 0 for the element's `from` side, 1 for its `to` side */
+const MODEL_FACE_LIST: { name: "north" | "east" | "south" | "west" | "up" | "down"; corners: [string, string, string, string]; shade: number }[] = [
+  { name: "up", corners: ["010", "110", "111", "011"], shade: 1.0 },
+  { name: "down", corners: ["000", "100", "101", "001"], shade: 0.55 },
+  { name: "north", corners: ["000", "100", "110", "010"], shade: 0.85 },
+  { name: "south", corners: ["001", "101", "111", "011"], shade: 0.85 },
+  { name: "west", corners: ["000", "001", "011", "010"], shade: 0.7 },
+  { name: "east", corners: ["100", "101", "111", "110"], shade: 0.7 },
+];
+/* rotation in degrees, applied as Rz, then Ry, then Rx around `origin` (same as three.js 'XYZ') */
+function rotateModelPoint(p: [number, number, number], origin: [number, number, number], r: [number, number, number]): [number, number, number] {
+  let x = p[0] - origin[0];
+  let y = p[1] - origin[1];
+  let z = p[2] - origin[2];
+  const [ax, ay, az] = r.map((d) => (d * Math.PI) / 180);
+  let c = Math.cos(az), s = Math.sin(az);
+  [x, y] = [x * c - y * s, x * s + y * c];
+  c = Math.cos(ay); s = Math.sin(ay);
+  [x, z] = [x * c + z * s, -x * s + z * c];
+  c = Math.cos(ax); s = Math.sin(ax);
+  [y, z] = [y * c - z * s, y * s + z * c];
+  return [x + origin[0], y + origin[1], z + origin[2]];
+}
 
 export class VoxelGame {
   private host: HTMLElement;
@@ -1737,6 +1765,50 @@ export class VoxelGame {
           const def = BLOCKS[id];
           if (!def) continue;
           const light = def.emissive ? 1.18 : this.skyLight(chunk, lx, y, lz);
+
+          /* ---- small 3D models (campfire) ---- */
+          if (def.model) {
+            const target = buffers.cutout;
+            const shade = Math.min(1.25, light);
+            const bx = originX + lx;
+            const bz = originZ + lz;
+            for (const el of CAMPFIRE_ELEMENTS) {
+              const f = el.from;
+              const t = el.to;
+              const origin = el.origin;
+              const rot = el.rotation;
+              const corner = (key: string): [number, number, number] => {
+                const p: [number, number, number] = [
+                  key[0] === "1" ? t[0] : f[0],
+                  key[1] === "1" ? t[1] : f[1],
+                  key[2] === "1" ? t[2] : f[2],
+                ];
+                return rotateModelPoint(p, origin, rot);
+              };
+              for (const face of MODEL_FACE_LIST) {
+                const uv = el.faces[face.name]?.uv;
+                if (!uv) continue;
+                const [u1, v1, u2, v2] = uv;
+                const uvs: [number, number][] = [
+                  [u1, v1],
+                  [u2, v1],
+                  [u2, v2],
+                  [u1, v2],
+                ];
+                const base = target.count;
+                face.corners.forEach((key, i) => {
+                  const [px, py, pz] = corner(key);
+                  target.pos.push(bx + px / 16, y + py / 16, bz + pz / 16);
+                  const [tu, tv] = atlasUV(CAMPFIRE_ATLAS.x + uvs[i][0], CAMPFIRE_ATLAS.y + uvs[i][1]);
+                  target.uv.push(tu, tv);
+                  target.col.push(shade * face.shade, shade * face.shade, shade * face.shade);
+                });
+                target.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+                target.count += 4;
+              }
+            }
+            continue;
+          }
 
           /* ---- cross-shaped plants ---- */
           if (def.cross) {
