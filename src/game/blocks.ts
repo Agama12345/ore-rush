@@ -88,6 +88,7 @@ export const B = {
   PACKED_ICE: 80,
   BLUE_ICE: 81,
   BED: 82,
+  COAL_BLOCK: 83,
 } as const;
 
 /* ------------------------------------------------------------------ *
@@ -198,6 +199,7 @@ export const T = {
   BLUE_ICE_TILE: 101,
   BED_TOP: 102,
   BED_SIDE: 103,
+  COAL_BLOCK_TILE: 104,
 } as const;
 
 export type ToolKind = "none" | "pickaxe" | "axe" | "shovel" | "sword" | "bow";
@@ -365,6 +367,7 @@ export const BLOCKS: Record<number, BlockDef> = {
   [B.CHEST]: def({ id: B.CHEST, name: "Chest", color: 0xb8943a, hardness: 0.5, score: 8, tool: "axe" }, { top: T.CHEST_TOP, side: T.CHEST_FRONT, bottom: T.CHEST_SIDE }),
   [B.TERRACOTTA]: def({ id: B.TERRACOTTA, name: "Terracotta", color: 0x9a5a3c, hardness: 0.7, score: 6, tool: "pickaxe" }, { top: T.TERRACOTTA }),
   [B.NETHERRACK]: def({ id: B.NETHERRACK, name: "Netherrack", color: 0x723636, hardness: 0.25, score: 4, tool: "pickaxe" }, { top: T.NETHERRACK }),
+  [B.COAL_BLOCK]: def({ id: B.COAL_BLOCK, name: "Coal Block", color: 0x2a2a2a, hardness: 5, score: 8, tool: "pickaxe" }, { top: T.COAL_BLOCK_TILE }),
   [B.BED]: def({ id: B.BED, name: "Bed", color: 0xb83b3b, hardness: 0.3, score: 6, tool: "axe" }, { top: T.BED_TOP, side: T.BED_SIDE }),
 };export const ORE_IDS = [B.COAL, B.IRON, B.GOLD, B.REDSTONE, B.LAPIS, B.DIAMOND, B.EMERALD];
 
@@ -1049,9 +1052,15 @@ PAINTERS[T.LILY] = (ctx, ox, oy, rnd) => {
   }
 };
 PAINTERS[T.COBWEB] = (ctx, ox, oy) => {
+  // white strands with a dark shadow so the web stays visible on snow, sky and stone
   const line = (x0: number, y0: number, x1: number, y1: number) => {
     const n = 16;
-    for (let i = 0; i <= n; i++) px(ctx, ox, oy, Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), "#e8e8e8");
+    for (let i = 0; i <= n; i++) {
+      const x = Math.round(x0 + ((x1 - x0) * i) / n);
+      const y = Math.round(y0 + ((y1 - y0) * i) / n);
+      px(ctx, ox, oy, x + 1, y + 1, "#4a4a4a");
+      px(ctx, ox, oy, x, y, "#ffffff");
+    }
   };
   line(0, 0, 15, 15);
   line(15, 0, 0, 15);
@@ -1112,6 +1121,11 @@ PAINTERS[T.CAMPFIRE_SIDE] = (ctx, ox, oy, rnd) => {
 };
 PAINTERS[T.PACKED_ICE_TILE] = plainTex(["#b3e5fc", "#81d4fa", "#4fc3f7"], 20, ["#03a9f4", "#e1f5fe"]);
 PAINTERS[T.BLUE_ICE_TILE] = plainTex(["#4fc3f7", "#29b6f6", "#03a9f4"], 20, ["#0288d1", "#b3e5fc"]);
+PAINTERS[T.COAL_BLOCK_TILE] = (ctx, ox, oy, rnd) => {
+  fill(ctx, ox, oy, rnd, ["#2c2c2c", "#333333", "#262626"]);
+  for (let i = 0; i < 10; i++) px(ctx, ox, oy, 2 + Math.floor(rnd() * 12), 2 + Math.floor(rnd() * 12), "#4a4a4a");
+  for (let i = 0; i < 16; i++) { px(ctx, ox, oy, i, 0, "#1a1a1a"); px(ctx, ox, oy, 0, i, "#1a1a1a"); }
+};
 PAINTERS[T.BED_TOP] = (ctx, ox, oy, rnd) => {
   fill(ctx, ox, oy, rnd, ["#e8e2d6", "#ddd6c8"]);
   for (let i = 0; i < 16; i++) px(ctx, ox, oy, i, 6, "#b83b3b"); // red blanket
