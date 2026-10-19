@@ -181,29 +181,45 @@ function caveAt(wx: number, y: number, wz: number, seed: number) {
 /* Ores: small veins. Coal is common near the top, iron is the main ore in the middle and deep,
    gold and redstone/lapis come from deeper, diamonds only in the deepest layer, emeralds only in mountains.
    Nothing grows on the surface. */
+/* Ore bands by depth, modelled on how ores are usually laid out in voxel games:
+ * coal is common everywhere, iron sits mid-depth, gold / redstone / lapis are
+ * deeper and rarer, diamonds are the deepest and rarest. Each band is a bell
+ * curve around `peak`, so the chance is highest at its peak and fades out. */
+const ORE_BANDS: { id: number; peak: number; spread: number; min: number; max: number; weight: number }[] = [
+  { id: B.COAL, peak: 58, spread: 34, min: 6, max: 999, weight: 1.2 },
+  { id: B.IRON, peak: 30, spread: 14, min: 8, max: 64, weight: 0.9 },
+  { id: B.GOLD, peak: 12, spread: 6, min: 3, max: 32, weight: 0.3 },
+  { id: B.REDSTONE, peak: 9, spread: 5, min: 3, max: 26, weight: 0.45 },
+  { id: B.LAPIS, peak: 8, spread: 5, min: 3, max: 24, weight: 0.25 },
+  { id: B.DIAMOND, peak: 5, spread: 3.5, min: 2, max: 16, weight: 0.1 },
+];
+
 function oreAt(wx: number, y: number, wz: number, seed: number, height: number, boost: boolean): number {
-  if (y < 4 || y > height - 2) return 0;
+  if (y < 2 || y > height - 2) return 0;
   const vein = noise3(wx * 0.55, y * 0.55, wz * 0.55, seed + 4242);
   if (vein < (boost ? 0.8 : 0.84)) return 0;
   const roll = hash3(wx, y, wz, seed + 31337);
   if (height > SEA_LEVEL + 20 && y >= 40 && roll < 0.03) return B.EMERALD;
-  if (y <= 14) {
-    if (roll < 0.04) return B.DIAMOND;
-    if (roll < 0.12) return B.REDSTONE;
-    if (roll < 0.18) return B.LAPIS;
-    if (roll < 0.3) return B.GOLD;
-    if (roll < 0.7) return B.IRON;
-    return B.COAL;
+  // weight of every ore that can exist at this depth
+  let total = 0;
+  const weights: number[] = [];
+  for (const band of ORE_BANDS) {
+    let w = 0;
+    if (y >= band.min && y <= band.max) {
+      const d = (y - band.peak) / band.spread;
+      w = band.weight * Math.exp(-0.5 * d * d);
+    }
+    weights.push(w);
+    total += w;
   }
-  if (y <= 40) {
-    if (roll < 0.06) return B.REDSTONE;
-    if (roll < 0.1) return B.LAPIS;
-    if (roll < 0.2) return B.GOLD;
-    if (roll < 0.6) return B.IRON;
-    return B.COAL;
+  if (total <= 0) return 0;
+  // choose the ore for this block in proportion to its weight
+  let pick = hash3(wx, y, wz, seed + 90210) * total;
+  for (let i = 0; i < ORE_BANDS.length; i++) {
+    pick -= weights[i];
+    if (pick <= 0) return ORE_BANDS[i].id;
   }
-  if (roll < 0.35) return B.IRON;
-  return B.COAL;
+  return ORE_BANDS[ORE_BANDS.length - 1].id;
 }
 
 function lavaLakeAt(wx: number, y: number, wz: number, seed: number) {
