@@ -5,8 +5,11 @@
  * - Pig oinks, sheep baa, chicken cluck, zombie groan, skeleton rattle, creeper hiss
  * - Material-accurate footsteps, mining, block breaking, and placing
  * - Ambient campfire crackling, bubbling lava, blizzard wind, cave echo
- * - Zero network latency, 100% reliable, zero external file dependency
+ * - Block, step, hurt and explosion sounds are real CC0 / CC BY recordings (see sampleData.ts);
+ *   the synthesiser stays as a fallback and for animals, monsters and UI
  */
+
+import { SAMPLES } from "./sampleData";
 
 export type Material = "grass" | "stone" | "wood" | "sand" | "glass" | "wool" | "metal" | "plant" | "liquid" | "snow" | "fire";
 
@@ -31,6 +34,8 @@ export class SoundEngine {
   private pinkNoiseBuffer: AudioBuffer | null = null;
   private last = new Map<string, number>();
   private ambientWindGain: GainNode | null = null;
+  private sampleBuffers = new Map<string, { buf: AudioBuffer; gain: number }[]>();
+  private samplesLoading = false;
 
   ensure(): AudioContext | null {
     if (!this.enabled) return null;
@@ -68,11 +73,170 @@ export class SoundEngine {
       // Noise buffers
       this.noiseBuffer = this.buildWhiteNoise(ctx, 2.0);
       this.pinkNoiseBuffer = this.buildPinkNoise(ctx, 2.0);
+      this.loadSamples(ctx);
     }
     if (this.ctx.state === "suspended") {
       void this.ctx.resume();
     }
     return this.ctx;
+  }
+
+  /** decode the bundled recordings once; until a group is ready its sounds fall back to the synth */
+  private loadSamples(ctx: AudioContext) {
+    if (this.samplesLoading) return;
+    this.samplesLoading = true;
+    for (const [group, items] of Object.entries(SAMPLES)) {
+      for (const item of items) {
+        try {
+          const bin = atob(item.data.slice(item.data.indexOf(",") + 1));
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          ctx.decodeAudioData(
+            bytes.buffer as ArrayBuffer,
+            (buf) => {
+              const list = this.sampleBuffers.get(group) ?? [];
+              list.push({ buf, gain: item.gain });
+              this.sampleBuffers.set(group, list);
+            },
+            () => {}
+          );
+        } catch {
+          /* a recording that cannot be decoded just falls back to the synth */
+        }
+      }
+    }
+  }
+
+  /** play a random variant of a recorded group; false when it is not decoded yet */
+  private playSample(
+    group: string,
+    opts: { vol?: number; rate?: number; jitter?: number; delay?: number; lowpass?: number; maxDur?: number } = {}
+  ): boolean {
+    const ctx = this.ensure();
+    const list = this.sampleBuffers.get(group);
+    if (!ctx || !this.dry || !list || list.length === 0) return false;
+    const pick = list[Math.floor(Math.random() * list.length)];
+    const t0 = ctx.currentTime + (opts.delay ?? 0);
+    const src = ctx.createBufferSource();
+    src.buffer = pick.buf;
+    const jitter = opts.jitter ?? 0.07;
+    src.playbackRate.value = (opts.rate ?? 1) * (1 - jitter + Math.random() * jitter * 2);
+    let node: AudioNode = src;
+    if (opts.lowpass) {
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = opts.lowpass;
+      node.connect(filter);
+      node = filter;
+    }
+    const gain = ctx.createGain();
+    const vol = Math.max(0.0002, (opts.vol ?? 1) * pick.gain * 0.8);
+    gain.gain.setValueAtTime(vol, t0);
+    if (opts.maxDur) {
+      gain.gain.setValueAtTime(vol, t0 + opts.maxDur * 0.65);
+      gain.gain.linearRampToValueAtTime(0.0001, t0 + opts.maxDur);
+    }
+    node.connect(gain);
+    gain.connect(this.dry);
+    if (this.reverbSend) gain.connect(this.reverbSend);
+    if (opts.maxDur) src.start(t0, 0, opts.maxDur + 0.05);
+    else src.start(t0);
+    return true;
+  }
+
+  private stepSample(mat: Material): boolean {
+    switch (mat) {
+      case "grass":
+      case "plant":
+        return this.playSample("sand_footstep", { vol: 0.7, rate: 0.85, lowpass: 3200 });
+      case "wool":
+        return this.playSample("sand_footstep", { vol: 0.5, rate: 0.8, lowpass: 900 });
+      case "wood":
+        return this.playSample("hard_footstep", { vol: 1.4, rate: 0.72, lowpass: 2600 });
+      case "stone":
+        return this.playSample("hard_footstep", { vol: 1.5 });
+      case "metal":
+        return this.playSample("metal_footstep", { vol: 0.8 });
+      case "sand":
+        return this.playSample("sand_footstep", { vol: 0.8 });
+      case "snow":
+        return this.playSample("snow_footstep", { vol: 0.85 });
+      case "liquid":
+        return this.playSample("water_footstep", { vol: 0.6, maxDur: 0.7 });
+      default:
+        return false;
+    }
+  }
+
+  private mineSample(mat: Material): boolean {
+    switch (mat) {
+      case "stone":
+        return this.playSample("dig_cracky", { vol: 1.6 });
+      case "metal":
+        return this.playSample("dig_metal", { vol: 0.9 });
+      case "wood":
+        return this.playSample("dig_choppy", { vol: 1.5 });
+      case "sand":
+      case "snow":
+        return this.playSample("gravel_dig", { vol: 0.8 });
+      case "grass":
+      case "plant":
+        return this.playSample("dig_snappy", { vol: 0.8 });
+      case "wool":
+        return this.playSample("gravel_dig", { vol: 0.5, rate: 0.8, lowpass: 1200 });
+      case "glass":
+        return false;
+      default:
+        return this.playSample("dig_cracky", { vol: 1.3, rate: 0.9 });
+    }
+  }
+
+  private brokeSample(mat: Material, ore: boolean): boolean {
+    switch (mat) {
+      case "stone": {
+        const ok = this.playSample("dig_cracky", { vol: 1, rate: 0.85 });
+        this.playSample("gravel_dug", { vol: 0.9, rate: 0.8, delay: 0.03 });
+        if (ore) this.playSample("dug_metal", { vol: 0.35, rate: 1.3, delay: 0.06 });
+        return ok;
+      }
+      case "metal":
+        return this.playSample("dug_metal", { vol: 0.9 });
+      case "wood": {
+        const ok = this.playSample("dig_choppy", { vol: 1, rate: 0.85 });
+        this.playSample("hard_footstep", { vol: 0.7, rate: 0.6, delay: 0.02, lowpass: 2000 });
+        return ok;
+      }
+      case "glass":
+        return this.playSample("break_glass", { vol: 0.9 });
+      case "grass":
+      case "plant": {
+        const ok = this.playSample("dig_snappy", { vol: 0.9, rate: 0.9 });
+        this.playSample("sand_footstep", { vol: 0.5, lowpass: 3000, delay: 0.02 });
+        return ok;
+      }
+      case "sand":
+      case "snow":
+        return this.playSample("gravel_dug", { vol: 0.9 });
+      case "wool":
+        return this.playSample("gravel_dug", { vol: 0.6, rate: 0.9, lowpass: 1200 });
+      default:
+        return this.playSample("gravel_dug", { vol: 0.85, rate: 0.85 });
+    }
+  }
+
+  private placeSample(mat: Material): boolean {
+    switch (mat) {
+      case "metal":
+        return this.playSample("place_node_metal", { vol: 0.9 });
+      case "stone":
+        return this.playSample("hard_footstep", { vol: 1.6, rate: 1.15 });
+      case "wood":
+        return this.playSample("hard_footstep", { vol: 1.5, rate: 0.85, lowpass: 3000 });
+      case "glass":
+        return false;
+      default:
+        return this.playSample("gravel_dug", { vol: 0.6, rate: 1.3, maxDur: 0.25 });
+    }
   }
 
   setEnabled(v: boolean) {
@@ -521,6 +685,7 @@ export class SoundEngine {
 
   step(mat: Material) {
     if (!this.throttle("step", 0.15)) return;
+    if (this.stepSample(mat)) return;
     const k = 0.92 + Math.random() * 0.16;
     switch (mat) {
       case "grass":
@@ -561,6 +726,7 @@ export class SoundEngine {
 
   mine(mat: Material) {
     if (!this.throttle("mine", 0.16)) return;
+    if (this.mineSample(mat)) return;
     const k = 0.9 + Math.random() * 0.2;
     switch (mat) {
       case "stone":
@@ -596,6 +762,7 @@ export class SoundEngine {
   }
 
   broke(mat: Material, ore = false) {
+    if (this.brokeSample(mat, ore)) return;
     const k = 0.92 + Math.random() * 0.16;
     switch (mat) {
       case "stone":
@@ -641,6 +808,7 @@ export class SoundEngine {
 
   place(mat: Material) {
     if (!this.throttle("place", 0.06)) return;
+    if (this.placeSample(mat)) return;
     const k = 0.92 + Math.random() * 0.16;
     switch (mat) {
       case "wood":
@@ -696,6 +864,7 @@ export class SoundEngine {
   }
 
   hurt() {
+    if (this.playSample("player_damage", { vol: 1.8, jitter: 0.04 })) return;
     // Classic "OOF!" sound
     this.vocalize({
       pitchTrack: [160, 115, 80],
@@ -765,6 +934,10 @@ export class SoundEngine {
   explode() {
     const ctx = this.ensure();
     if (!ctx) return;
+    if (this.playSample("tnt_explode", { vol: 1.1, jitter: 0.03 })) {
+      this.tone(48, 0.9, { type: "sine", vol: 0.25, slide: 26 });
+      return;
+    }
     this.noise(1.6, 0.65, 650, "lowpass", 0, 0.6);
     this.noise(0.4, 0.45, 2600, "lowpass");
     this.tone(52, 1.1, { type: "sine", vol: 0.55, slide: 24 });

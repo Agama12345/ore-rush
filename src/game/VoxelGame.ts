@@ -2272,6 +2272,59 @@ export class VoxelGame {
     return group;
   }
 
+  /** the campfire as its 3D model (same elements and atlas texture as the placed block), sized for the hand */
+  private makeCampfireHeld() {
+    type Quad = { corners: [number, number, number][]; uvs: [number, number][]; shade: number };
+    const quads: Quad[] = [];
+    for (const el of CAMPFIRE_ELEMENTS) {
+      for (const face of MODEL_FACE_LIST) {
+        const fu = el.faces[face.name];
+        if (!fu) continue;
+        const [u1, v1, u2, v2] = fu.uv;
+        const corners = face.corners.map((key) => {
+          const p: [number, number, number] = [
+            key[0] === "1" ? el.to[0] : el.from[0],
+            key[1] === "1" ? el.to[1] : el.from[1],
+            key[2] === "1" ? el.to[2] : el.from[2],
+          ];
+          return rotateModelPoint(p, el.origin, el.rotation);
+        });
+        quads.push({ corners, uvs: [[u1, v1], [u2, v1], [u2, v2], [u1, v2]], shade: face.shade });
+      }
+    }
+    const min = [Infinity, Infinity, Infinity];
+    const max = [-Infinity, -Infinity, -Infinity];
+    for (const q of quads) for (const c of q.corners) for (let i = 0; i < 3; i++) {
+      min[i] = Math.min(min[i], c[i]);
+      max[i] = Math.max(max[i], c[i]);
+    }
+    const longest = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]) || 1;
+    const scale = 0.58 / longest;
+    const pos: number[] = [];
+    const uv: number[] = [];
+    const col: number[] = [];
+    const idx: number[] = [];
+    for (const q of quads) {
+      const base = pos.length / 3;
+      q.corners.forEach((c, i) => {
+        pos.push((c[0] - (min[0] + max[0]) / 2) * scale, (c[1] - (min[1] + max[1]) / 2) * scale, (c[2] - (min[2] + max[2]) / 2) * scale);
+        const [tu, tv] = atlasUV(CAMPFIRE_ATLAS.x + q.uvs[i][0], CAMPFIRE_ATLAS.y + q.uvs[i][1]);
+        uv.push(tu, tv);
+        col.push(q.shade, q.shade, q.shade);
+      });
+      idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    geometry.setIndex(idx);
+    return new THREE.Mesh(
+      geometry,
+      new THREE.MeshBasicMaterial({ map: this.atlasTexture, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide })
+    );
+  }
+
   private makeToolModel(itemId: number) {
     const item = ITEMS[itemId];
     if (item.model) return this.makeModelSword(item.model);
@@ -2341,7 +2394,7 @@ export class VoxelGame {
       this.handPivot.add(tool);
       this.handArm.visible = true;
     } else if (BLOCKS[slot.id]) {
-      const cube = this.makeBlockCube(slot.id, 0.42);
+      const cube = BLOCKS[slot.id].model && slot.id === B.CAMPFIRE ? this.makeCampfireHeld() : this.makeBlockCube(slot.id, 0.42);
       cube.position.set(0.02, 0.1, -0.5);
       cube.rotation.set(0.25, 0.75, 0);
       this.handContent = cube;
