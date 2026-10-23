@@ -391,7 +391,7 @@ export const isReplaceable = (id: number) => id === 0 || (BLOCKS[id]?.replaceabl
 export const isCross = (id: number) => (BLOCKS[id]?.cross ?? false);
 
 /** coarse material family, used for audio */
-export function materialOf(id: number): "grass" | "stone" | "wood" | "sand" | "glass" | "wool" | "metal" | "plant" | "liquid" | "snow" {
+export function materialOf(id: number): "grass" | "stone" | "wood" | "sand" | "glass" | "wool" | "metal" | "plant" | "liquid" | "snow" | "gravel" {
   const d = BLOCKS[id];
   if (!d) return "stone";
   if (d.liquid) return "liquid";
@@ -413,9 +413,10 @@ export function materialOf(id: number): "grass" | "stone" | "wood" | "sand" | "g
       return "grass";
     case B.SAND:
     case B.SANDSTONE:
-    case B.GRAVEL:
     case B.CLAY:
       return "sand";
+    case B.GRAVEL:
+      return "gravel";
     case B.LOG:
     case B.BIRCH_LOG:
     case B.SPRUCE_LOG:

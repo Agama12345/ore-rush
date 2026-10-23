@@ -43,7 +43,7 @@ const EMPTY_STATS: PublicStats = {
   temperature: 20,
   maxTemperature: 20,
   backpack: emptySlots(27),
-  ui: { container: null, cursor: { id: 0, count: 0 }, craftSize: 2, craft: emptySlots(9), result: null, furnace: null },
+  ui: { container: null, cursor: { id: 0, count: 0 }, craftSize: 2, craft: emptySlots(9), result: null, furnace: null, chest: null },
   hotbar: CREATIVE_HOTBAR.map((id: number) => ({ id, count: -1 })),
   selected: 0,
   held: { id: 0, name: "", kind: "empty" },

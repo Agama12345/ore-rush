@@ -116,7 +116,7 @@ export default function Inventory({ ui, hotbar, backpack, selected, mode, touch,
   }, [showAll, canCraft, ui, hotbar, backpack]);
 
   const title =
-    ui.container === "table" ? t("craftingTable") : ui.container === "furnace" ? t("furnace") : creative ? t("palette") : t("inventory");
+    ui.container === "table" ? t("craftingTable") : ui.container === "furnace" ? t("furnace") : ui.container === "chest" ? t("chest") : creative ? t("palette") : t("inventory");
   const cursorFilled = ui.cursor.id !== 0 && ui.cursor.count !== 0;
 
   const inventoryGrid = (
@@ -181,9 +181,15 @@ export default function Inventory({ ui, hotbar, backpack, selected, mode, touch,
         ) : (
           <>
             <div className="flex flex-col gap-3 md:flex-row">
-              {/* crafting / smelting area */}
+              {/* crafting / smelting / storage area */}
               <div className="mc-inset flex min-h-[150px] flex-1 items-center justify-center gap-3 p-3">
-                {ui.container === "furnace" && ui.furnace ? (
+                {ui.container === "chest" && ui.chest ? (
+                  <div className="grid grid-cols-9 gap-[3px]">
+                    {ui.chest.map((slot, index) => (
+                      <Slot key={`ch-${index}`} slot={slot} size={slotSize} onAction={click("chest", index)} />
+                    ))}
+                  </div>
+                ) : ui.container === "furnace" && ui.furnace ? (
                   <div className="flex items-center gap-4">
                     <div className="flex flex-col items-center gap-1">
                       <Slot slot={ui.furnace.input} size={slotSize} label="⛏" onAction={click("fIn", 0)} />
@@ -207,7 +213,7 @@ export default function Inventory({ ui, hotbar, backpack, selected, mode, touch,
               </div>
 
               {/* recipe book */}
-              {ui.container !== "furnace" && (
+              {ui.container !== "furnace" && ui.container !== "chest" && (
                 <div className="mc-inset flex w-full flex-col p-2 md:w-[250px]">
                   <div className="mb-1.5 flex items-center justify-between">
                     <span className="font-pixel text-[11px] text-[#3f3f3f]">{t("recipeBook")}</span>
@@ -246,7 +252,7 @@ export default function Inventory({ ui, hotbar, backpack, selected, mode, touch,
 
         <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
           <p className="font-pixel text-[9px] leading-relaxed text-[#555]">
-            {creative ? t("closeHint") : ui.container === "furnace" ? t("furnaceTip") : touch ? t("touchTip") : t("invTip")}
+            {creative ? t("closeHint") : ui.container === "furnace" ? t("furnaceTip") : ui.container === "chest" ? t("chestTip") : touch ? t("touchTip") : t("invTip")}
           </p>
           <PixelButton size="sm" onClick={onClose}>
             {t("backToWorld")}

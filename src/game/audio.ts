@@ -11,7 +11,7 @@
 
 import { SAMPLES } from "./sampleData";
 
-export type Material = "grass" | "stone" | "wood" | "sand" | "glass" | "wool" | "metal" | "plant" | "liquid" | "snow" | "fire";
+export type Material = "grass" | "stone" | "wood" | "sand" | "glass" | "wool" | "metal" | "plant" | "liquid" | "snow" | "gravel" | "fire";
 
 type ToneOpts = {
   type?: OscillatorType;
@@ -159,6 +159,8 @@ export class SoundEngine {
         return this.playSample("metal_footstep", { vol: 0.8 });
       case "sand":
         return this.playSample("sand_footstep", { vol: 0.8 });
+      case "gravel":
+        return this.playSample("gravel_dig", { vol: 0.45, rate: 1.25, maxDur: 0.28 });
       case "snow":
         return this.playSample("snow_footstep", { vol: 0.85 });
       case "liquid":
@@ -178,6 +180,7 @@ export class SoundEngine {
         return this.playSample("dig_choppy", { vol: 1.5 });
       case "sand":
       case "snow":
+      case "gravel":
         return this.playSample("gravel_dig", { vol: 0.8 });
       case "grass":
       case "plant":
@@ -216,6 +219,7 @@ export class SoundEngine {
       }
       case "sand":
       case "snow":
+      case "gravel":
         return this.playSample("gravel_dug", { vol: 0.9 });
       case "wool":
         return this.playSample("gravel_dug", { vol: 0.6, rate: 0.9, lowpass: 1200 });

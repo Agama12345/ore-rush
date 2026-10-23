@@ -109,8 +109,9 @@ export type RunSummary = {
   finishedAt: number;
 };
 
-export type ContainerType = "inventory" | "table" | "furnace";
-export type SlotArea = "inv" | "craft" | "result" | "fIn" | "fFuel" | "fOut";
+export type ContainerType = "inventory" | "table" | "furnace" | "chest";
+export type SlotArea = "inv" | "craft" | "result" | "fIn" | "fFuel" | "fOut" | "chest";
+export const CHEST_SLOTS = 27;
 export type ContainerUI = {
   container: ContainerType | null;
   cursor: HotbarSlot;
@@ -118,6 +119,7 @@ export type ContainerUI = {
   craft: HotbarSlot[];
   result: { id: number; count: number } | null;
   furnace: { input: HotbarSlot; fuel: HotbarSlot; output: HotbarSlot; burn: number; cook: number } | null;
+  chest: HotbarSlot[] | null;
 };
 type FurnaceState = { input: HotbarSlot; fuel: HotbarSlot; output: HotbarSlot; burn: number; burnMax: number; cook: number };
 
@@ -406,6 +408,8 @@ export class VoxelGame {
   private container: ContainerType | null = null;
   private furnaceKey: string | null = null;
   private furnaces = new Map<string, FurnaceState>();
+  private chests = new Map<string, HotbarSlot[]>();
+  private chestKey: string | null = null;
   private lightTint = new THREE.Color(1, 1, 1);
   private caveFactor = 0;
   private envTimer = 0;
@@ -615,6 +619,7 @@ export class VoxelGame {
     if (this.container) this.closeContainer(true);
     this.prepareWorld(Math.floor(Math.random() * 1_000_000), mode === "sprint");
     this.furnaces.clear();
+    this.chests.clear();
     this.cursor = this.emptySlot();
     this.resetRunValues();
     this.placePlayerAtSpawn();
@@ -814,6 +819,11 @@ export class VoxelGame {
       if (used === B.FURNACE) {
         this.triggerSwing();
         this.openContainer("furnace", `${tx},${ty},${tz}`);
+        return;
+      }
+      if (used === B.CHEST) {
+        this.triggerSwing();
+        this.openContainer("chest", `${tx},${ty},${tz}`);
         return;
       }
       if (used === B.BED) {
@@ -1321,10 +1331,14 @@ export class VoxelGame {
   }
 
   private currentRecipe(): Recipe | null {
-    if (!this.container || this.container === "furnace") return null;
+    if (!this.container || this.container === "furnace" || this.container === "chest") return null;
     const size = this.craftSize();
     const ids = this.craftGrid.slice(0, size * size).map((slot) => (slot.count > 0 ? slot.id : 0));
     return matchRecipe(ids, size);
+  }
+
+  private chestSlots() {
+    return this.chestKey ? this.chests.get(this.chestKey) ?? null : null;
   }
 
   private furnaceState() {
@@ -1338,7 +1352,11 @@ export class VoxelGame {
 
   private openContainer(type: ContainerType, key: string | null = null) {
     this.container = type;
-    this.furnaceKey = key;
+    this.furnaceKey = type === "furnace" ? key : null;
+    this.chestKey = type === "chest" ? key : null;
+    if (type === "chest" && key && !this.chests.has(key)) {
+      this.chests.set(key, Array.from({ length: CHEST_SLOTS }, () => this.emptySlot()));
+    }
     if (type === "furnace" && key && !this.furnaces.has(key)) {
       this.furnaces.set(key, { input: this.emptySlot(), fuel: this.emptySlot(), output: this.emptySlot(), burn: 0, burnMax: 0, cook: 0 });
     }
@@ -1364,6 +1382,7 @@ export class VoxelGame {
     this.cursor = this.emptySlot();
     this.container = null;
     this.furnaceKey = null;
+    this.chestKey = null;
     this.inputEnabled = true;
     if (!silent) this.sfx.close();
     this.cb.onContainer(null);
@@ -1375,6 +1394,7 @@ export class VoxelGame {
   private slotRef(area: SlotArea, index: number): HotbarSlot | null {
     if (area === "inv") return this.allSlots()[index] ?? null;
     if (area === "craft") return index < this.craftSize() ** 2 ? this.craftGrid[index] : null;
+    if (area === "chest") return this.chestSlots()?.[index] ?? null;
     const furnace = this.furnaceState();
     if (!furnace) return null;
     if (area === "fIn") return furnace.input;
@@ -1465,6 +1485,14 @@ export class VoxelGame {
       if (slot.id === 0 || slot.count === 0) return;
       if (area !== "inv") this.moveInto(slot, this.allSlots());
       else {
+        const chest = this.container === "chest" ? this.chestSlots() : null;
+        if (chest) {
+          this.moveInto(slot, chest);
+          this.sfx.slot();
+          this.refreshHandModel();
+          this.emitStats(true);
+          return;
+        }
         const furnace = this.container === "furnace" ? this.furnaceState() : null;
         if (furnace && SMELTING[slot.id] !== undefined) this.moveInto(slot, [furnace.input]);
         else if (furnace && FUEL[slot.id] !== undefined) this.moveInto(slot, [furnace.fuel]);
@@ -1592,7 +1620,7 @@ export class VoxelGame {
   }
 
   canCraft(recipe: Recipe) {
-    if (!this.container || this.container === "furnace") return false;
+    if (!this.container || this.container === "furnace" || this.container === "chest") return false;
     if (recipe.size > this.craftSize()) return false;
     return recipeNeeds(recipe).every((need) => this.available(need.id) >= need.count);
   }
@@ -1677,6 +1705,7 @@ export class VoxelGame {
             cook: furnace.cook / SMELT_TIME,
           }
         : null,
+      chest: this.container === "chest" ? (this.chestSlots() ?? []).map((slot) => ({ ...slot })) : null,
     };
   }
 
@@ -3447,6 +3476,17 @@ export class VoxelGame {
     }
   }
 
+  /** a broken or blown-up chest drops everything it held */
+  private spillChest(x: number, y: number, z: number) {
+    const key = `${x},${y},${z}`;
+    const chest = this.chests.get(key);
+    if (!chest) return;
+    chest.forEach((slot) => {
+      if (slot.id !== 0 && slot.count !== 0) this.spawnItemDrop(slot.id, slot.count < 0 ? 1 : slot.count, x, y, z);
+    });
+    this.chests.delete(key);
+  }
+
   private destroyBlock(x: number, y: number, z: number) {
     const id = this.getBlock(x, y, z);
     if (!id) return;
@@ -3460,6 +3500,7 @@ export class VoxelGame {
         this.furnaces.delete(key);
       }
     }
+    if (id === B.CHEST) this.spillChest(x, y, z);
     this.setBlock(x, y, z, 0);
     this.minedCounts[id] = (this.minedCounts[id] ?? 0) + 1;
     this.blocksMined++;
@@ -3535,6 +3576,7 @@ export class VoxelGame {
           if (!id) continue;
           const def = BLOCKS[id];
           if (!def || def.hardness > 20) continue;
+          if (id === B.CHEST) this.spillChest(bx, by, bz);
           this.setBlock(bx, by, bz, 0);
           this.minedCounts[id] = (this.minedCounts[id] ?? 0) + 1;
           this.blocksMined++;
