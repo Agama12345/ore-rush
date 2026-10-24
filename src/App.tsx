@@ -40,6 +40,7 @@ const EMPTY_STATS: PublicStats = {
   maxHealth: 20,
   hunger: 20,
   maxHunger: 20,
+  armor: 0,
   temperature: 20,
   maxTemperature: 20,
   backpack: emptySlots(27),
@@ -265,6 +266,18 @@ export default function App() {
     game.startRun(mode);
   }, []);
 
+  const continueGame = useCallback(() => {
+    const game = gameRef.current;
+    if (!game) return;
+    setShowHelp(false);
+    setPopups([]);
+    setFlash(null);
+    setRunResult(null);
+    savedRunRef.current = null;
+    game.setInputEnabled(true);
+    game.continueRun();
+  }, []);
+
   const restart = useCallback(() => startGame(stats.mode), [startGame, stats.mode]);
 
   const toggleSound = useCallback(() => {
@@ -423,6 +436,7 @@ export default function App() {
           muted={muted}
           onToggleSound={toggleSound}
           onPlay={startGame}
+          onContinue={VoxelGame.hasSave() ? continueGame : undefined}
           onHelp={() => setShowHelp(true)}
           isTouch={touch}
           renderDistance={renderDistance}

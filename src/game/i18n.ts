@@ -198,6 +198,8 @@ const D: Record<string, Entry> = {
   craftingTable: { en: "Crafting Table", pl: "Stół rzemieślniczy" },
   furnace: { en: "Furnace", pl: "Piec" },
   chest: { en: "Chest", pl: "Skrzynia" },
+  continueWorld: { en: "Continue saved world", pl: "Kontynuuj zapisany świat" },
+  armorOn: { en: "armor equipped", pl: "zbroja założona" },
   chestTip: { en: "store your things · shift+click: quick move", pl: "przechowuj rzeczy · shift+klik: szybkie przeniesienie" },
   palette: { en: "Blocks & tools", pl: "Bloki i narzędzia" },
   creativePalette: { en: "creative palette", pl: "paleta trybu kreatywnego" },

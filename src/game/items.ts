@@ -232,6 +232,13 @@ export const ITEMS: Record<number, ItemDef> = {
   [I.EGG]: material(I.EGG, "Egg", "nugget", 0xf2e6cf, 0xffffff),
 };
 
+/** armor points per chestplate; each point cuts incoming damage by 5% */
+export const ARMOR_POINTS: Record<number, number> = {
+  [I.LEATHER_COAT]: 3,
+  [I.IRON_CHESTPLATE]: 6,
+  [I.DIAMOND_CHESTPLATE]: 8,
+};
+
 export const isItem = (id: number) => id < 0;
 export const itemDef = (id: number) => ITEMS[id];
 export const stackSize = (id: number) => (isItem(id) ? ITEMS[id]?.stack ?? 64 : 64);

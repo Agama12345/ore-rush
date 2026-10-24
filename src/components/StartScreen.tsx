@@ -10,6 +10,7 @@ type Props = {
   muted: boolean;
   onToggleSound: () => void;
   onPlay: (mode: GameMode) => void;
+  onContinue?: () => void;
   onHelp: () => void;
   isTouch: boolean;
   renderDistance: number;
@@ -26,6 +27,7 @@ export default function StartScreen({
   muted,
   onToggleSound,
   onPlay,
+  onContinue,
   onHelp,
   isTouch,
   renderDistance,
@@ -106,6 +108,12 @@ export default function StartScreen({
                   </button>
                 ))}
               </div>
+
+              {onContinue && (
+                <div className="mt-3">
+                  <PixelButton onClick={onContinue}>▶ {t("continueWorld")}</PixelButton>
+                </div>
+              )}
 
               <div className="mt-4 flex flex-wrap items-center gap-2.5">
                 <div className="info-pill">

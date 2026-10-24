@@ -25,6 +25,7 @@ import {
   MOB_DROPS,
   RECIPES,
   SMELTING,
+  ARMOR_POINTS,
   SMELT_TIME,
   SPRINT_HOTBAR,
   attackDamage,
@@ -76,6 +77,7 @@ export type PublicStats = {
   maxHealth: number;
   hunger: number;
   maxHunger: number;
+  armor: number;
   temperature: number;
   maxTemperature: number;
   backpack: HotbarSlot[];
@@ -108,6 +110,8 @@ export type RunSummary = {
   mined: Record<number, number>;
   finishedAt: number;
 };
+
+const SAVE_KEY = "oreRush.save.v1";
 
 export type ContainerType = "inventory" | "table" | "furnace" | "chest";
 export type SlotArea = "inv" | "craft" | "result" | "fIn" | "fFuel" | "fOut" | "chest";
@@ -409,12 +413,16 @@ export class VoxelGame {
   private furnaceKey: string | null = null;
   private furnaces = new Map<string, FurnaceState>();
   private chests = new Map<string, HotbarSlot[]>();
+  /** every block the player (or fluids/TNT) changed, per chunk, so a world can be saved and rebuilt from its seed */
+  private edits = new Map<string, Map<number, number>>();
+  private saveTimer = 0;
   private chestKey: string | null = null;
   private lightTint = new THREE.Color(1, 1, 1);
   private caveFactor = 0;
   private envTimer = 0;
   private regen = 0;
   private hurtCooldown = 0;
+  private armorItem = 0;
   private minedCounts: Record<number, number> = {};
   private hotbar: HotbarSlot[] = [];
   private selected = 0;
@@ -617,6 +625,7 @@ export class VoxelGame {
     this.oreBoost = mode === "sprint";
     this.sfx.setBlizzard(mode === "cold");
     if (this.container) this.closeContainer(true);
+    this.edits.clear();
     this.prepareWorld(Math.floor(Math.random() * 1_000_000), mode === "sprint");
     this.furnaces.clear();
     this.chests.clear();
@@ -632,9 +641,123 @@ export class VoxelGame {
     this.tryLock();
   }
 
+  /** Survival and cold worlds are saved to this browser/app (localStorage). */
+  static hasSave(): boolean {
+    try {
+      return !!window.localStorage.getItem(SAVE_KEY);
+    } catch {
+      return false;
+    }
+  }
+
+  saveGame() {
+    if (this.screen !== "playing" && this.screen !== "paused") return;
+    if (this.mode !== "survival" && this.mode !== "cold") return;
+    const slots = (list: HotbarSlot[]) => list.map((s) => [s.id, s.count]);
+    const edits: Record<string, number[]> = {};
+    this.edits.forEach((map, key) => {
+      const flat: number[] = [];
+      map.forEach((id, index) => flat.push(index, id));
+      edits[key] = flat;
+    });
+    const data = {
+      v: 1,
+      mode: this.mode,
+      seed: this.seed,
+      edits,
+      hotbar: slots(this.hotbar),
+      backpack: slots(this.backpack),
+      health: this.health,
+      hunger: this.hunger,
+      temperature: this.temperature,
+      dayTime: this.dayTime,
+      armor: this.armorItem,
+      selected: this.selected,
+      pos: [this.player.pos.x, this.player.pos.y, this.player.pos.z, this.player.yaw, this.player.pitch],
+      respawn: this.respawnPos ? [this.respawnPos.x, this.respawnPos.y, this.respawnPos.z] : null,
+      chests: [...this.chests.entries()].map(([key, list]) => [key, slots(list)]),
+      furnaces: [...this.furnaces.entries()].map(([key, f]) => [key, slots([f.input, f.fuel, f.output]), f.burn, f.burnMax, f.cook]),
+    };
+    try {
+      window.localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    } catch {
+      /* storage full or unavailable: the world just isn't saved */
+    }
+  }
+
+  continueRun(): boolean {
+    let data: any;
+    try {
+      data = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "null");
+    } catch {
+      data = null;
+    }
+    if (!data || data.v !== 1 || (data.mode !== "survival" && data.mode !== "cold")) return false;
+    const toSlots = (list: number[][]): HotbarSlot[] => list.map(([id, count]) => ({ id, count }));
+
+    this.sfx.ensure();
+    this.sfx.start();
+    this.mode = data.mode;
+    this.oreBoost = false;
+    this.sfx.setBlizzard(this.mode === "cold");
+    if (this.container) this.closeContainer(true);
+
+    this.edits.clear();
+    Object.entries(data.edits as Record<string, number[]>).forEach(([key, flat]) => {
+      const map = new Map<number, number>();
+      for (let i = 0; i + 1 < flat.length; i += 2) map.set(flat[i], flat[i + 1]);
+      this.edits.set(key, map);
+    });
+    this.prepareWorld(data.seed, false);
+    this.cursor = this.emptySlot();
+    this.resetRunValues();
+
+    this.hotbar = toSlots(data.hotbar);
+    this.backpack = toSlots(data.backpack);
+    this.health = data.health;
+    this.hunger = data.hunger;
+    this.temperature = data.temperature;
+    this.dayTime = data.dayTime;
+    this.armorItem = data.armor ?? 0;
+    this.selected = data.selected ?? 0;
+    this.respawnPos = data.respawn ? new THREE.Vector3(data.respawn[0], data.respawn[1], data.respawn[2]) : null;
+    this.chests = new Map((data.chests as [string, number[][]][]).map(([key, list]) => [key, toSlots(list)]));
+    this.furnaces = new Map(
+      (data.furnaces as [string, number[][], number, number, number][]).map(([key, list, burn, burnMax, cook]) => {
+        const [input, fuel, output] = toSlots(list);
+        return [key, { input, fuel, output, burn, burnMax, cook }];
+      }),
+    );
+
+    // make sure the ground under the player exists before they appear
+    const [px, py, pz, yaw, pitch] = data.pos as number[];
+    const pcx = Math.floor(px / CHUNK_SIZE);
+    const pcz = Math.floor(pz / CHUNK_SIZE);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) this.buildChunkMesh(this.ensureChunk(pcx + dx, pcz + dz));
+    this.player.pos.set(px, py + 0.05, pz);
+    this.player.vel.set(0, 0, 0);
+    this.player.yaw = yaw;
+    this.player.pitch = pitch;
+    this.player.onGround = false;
+    this.player.flying = false;
+    this.player.fallStart = py;
+    this.camera.position.set(px, py + 0.05 + EYE_HEIGHT, pz);
+    this.camera.rotation.set(pitch, yaw, 0, "YXZ");
+
+    this.spawnMobs(true);
+    this.refreshHandModel();
+    this.screen = "playing";
+    this.cb.onScreen("playing");
+    this.cb.onFx("start");
+    this.emitStats(true);
+    this.tryLock();
+    return true;
+  }
+
   pause() {
     if (this.screen !== "playing") return;
     if (this.container) this.closeContainer(true);
+    this.saveGame();
     this.screen = "paused";
     this.stopInput();
     this.releaseLock();
@@ -655,6 +778,7 @@ export class VoxelGame {
 
   toMenu() {
     if (this.container) this.closeContainer(true);
+    this.saveGame();
     this.screen = "menu";
     this.stopInput();
     this.releaseLock();
@@ -949,6 +1073,21 @@ export class VoxelGame {
         return;
       }
 
+      // 5b. Put on armor
+      if (ARMOR_POINTS[slot.id] !== undefined) {
+        const worn = this.armorItem;
+        this.armorItem = slot.id;
+        slot.count -= 1;
+        if (slot.count <= 0) slot.id = 0;
+        if (worn) this.addItem(worn, 1);
+        this.triggerSwing();
+        this.sfx.slot();
+        this.popup(displayName(this.armorItem).toUpperCase(), t("armorOn"), "info");
+        this.refreshHandModel();
+        this.emitStats(true);
+        return;
+      }
+
       // 6. Food eating
       if (this.eatHeld()) return;
 
@@ -1071,6 +1210,24 @@ export class VoxelGame {
       meshed: false,
     };
     generateChunk(cx, cz, chunk.blocks, chunk.heights, chunk.biomes, { seed: this.seed, oreBoost: this.oreBoost, coldMode: this.mode === "cold" });
+    const saved = this.edits.get(key);
+    if (saved) {
+      saved.forEach((id, index) => {
+        chunk.blocks[index] = id;
+      });
+      for (let lz = 0; lz < CHUNK_SIZE; lz++) {
+        for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+          let top = 0;
+          for (let y = WORLD_HEIGHT - 1; y >= 0; y--) {
+            if (chunk.blocks[blockIndex(lx, y, lz)] !== 0) {
+              top = y;
+              break;
+            }
+          }
+          chunk.heights[lx + lz * CHUNK_SIZE] = top;
+        }
+      }
+    }
     this.chunks.set(key, chunk);
     return chunk;
   }
@@ -1097,6 +1254,10 @@ export class VoxelGame {
     const lx = x - cx * CHUNK_SIZE;
     const lz = z - cz * CHUNK_SIZE;
     chunk.blocks[blockIndex(lx, y, lz)] = id;
+    const chunkKey = this.key(cx, cz);
+    let chunkEdits = this.edits.get(chunkKey);
+    if (!chunkEdits) this.edits.set(chunkKey, (chunkEdits = new Map()));
+    chunkEdits.set(blockIndex(lx, y, lz), id);
 
     const colIdx = lx + lz * CHUNK_SIZE;
     if (id !== 0 && y > chunk.heights[colIdx]) chunk.heights[colIdx] = y;
@@ -1218,6 +1379,7 @@ export class VoxelGame {
     this.health = MAX_HEALTH;
     this.regen = 0;
     this.hurtCooldown = 0;
+    this.armorItem = 0;
     this.minedCounts = {};
     this.selected = 0;
     this.mining = false;
@@ -2895,7 +3057,8 @@ export class VoxelGame {
     if (this.mode === "creative") return;
     if (this.hurtCooldown > 0) return;
     this.hurtCooldown = 0.45;
-    this.health = Math.max(0, this.health - amount);
+    const reduced = amount * (1 - Math.min(0.8, (ARMOR_POINTS[this.armorItem] ?? 0) * 0.05));
+    this.health = Math.max(0, this.health - reduced);
     this.regen = 0;
     this.trauma = Math.min(1, this.trauma + 0.3);
     this.sfx.hurt();
@@ -3181,7 +3344,7 @@ export class VoxelGame {
       if (held === B.TORCH || held === I.LAVA_BUCKET || held === I.FLINT_AND_STEEL) {
         warmthRate += 1.2;
       }
-      if (this.hotbar.some((s) => s.id === I.LEATHER_COAT)) {
+      if (this.armorItem === I.LEATHER_COAT || this.hotbar.some((s) => s.id === I.LEATHER_COAT)) {
         warmthRate += 0.8;
       }
 
@@ -3908,6 +4071,7 @@ export class VoxelGame {
       maxHealth: MAX_HEALTH,
       hunger: this.hunger,
       maxHunger: MAX_HUNGER,
+      armor: ARMOR_POINTS[this.armorItem] ?? 0,
       temperature: this.temperature,
       maxTemperature: MAX_TEMPERATURE,
       backpack: this.backpack.map((slot) => ({ ...slot })),
@@ -3967,6 +4131,11 @@ export class VoxelGame {
       this.updateFluids(dt);
       this.updateLavaAmbience(dt);
       this.updateFurnaces(dt);
+      this.saveTimer += dt;
+      if (this.saveTimer > 20) {
+        this.saveTimer = 0;
+        this.saveGame();
+      }
       this.envTimer -= dt;
       if (this.envTimer <= 0) {
         this.envTimer = 0.5;

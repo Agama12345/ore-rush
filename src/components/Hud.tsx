@@ -235,6 +235,11 @@ export default function Hud({
         {stats.mode !== "creative" && (
           <div className="flex items-center gap-3 rounded-[6px] border-2 border-ink/60 bg-ink/70 px-2 py-1 backdrop-blur-sm">
             <Hearts health={stats.health} max={stats.maxHealth} />
+            {stats.armor > 0 && (
+              <span title={t("armorOn")} className="font-pixel text-[10px] text-paper/90">
+                🛡 {stats.armor}
+              </span>
+            )}
             {(survival || cold) && <Hunger hunger={stats.hunger} max={stats.maxHunger} />}
             {cold && <Thermometer temp={stats.temperature} max={stats.maxTemperature} />}
           </div>
