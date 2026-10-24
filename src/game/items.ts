@@ -107,6 +107,12 @@ export const I = {
   WAX_SWORD: -65,
   MANDRAKE_SWORD: -66,
   PUMPKIN_PIE: -61,
+  GOLD_PICK: -67,
+  GOLD_SWORD: -68,
+  GOLD_AXE: -69,
+  GOLD_SHOVEL: -70,
+  GOLD_CHESTPLATE: -71,
+  GOLDEN_APPLE: -72,
 } as const;
 
 const tool = (
@@ -185,6 +191,10 @@ export const ITEMS: Record<number, ItemDef> = {
   [I.STONE_SHOVEL]: tool(I.STONE_SHOVEL, "Stone Shovel", "shovel", 2, 3.8, 3, 0x9aa0a2, 0x6f7578, "SHVL"),
   [I.IRON_SHOVEL]: tool(I.IRON_SHOVEL, "Iron Shovel", "shovel", 3, 5.4, 4, 0xdadada, 0x8c8c8c, "SHVL"),
   [I.DIAMOND_SHOVEL]: tool(I.DIAMOND_SHOVEL, "Diamond Shovel", "shovel", 4, 8, 5, 0x5de3e3, 0x2f9fa3, "SHVL"),
+  [I.GOLD_PICK]: tool(I.GOLD_PICK, "Golden Pickaxe", "pickaxe", 1, 8, 2, 0xf7d33c, 0xb8901a, "PICK"),
+  [I.GOLD_SWORD]: tool(I.GOLD_SWORD, "Golden Sword", "sword", 1, 1.6, 4, 0xf7d33c, 0xb8901a, "SWD"),
+  [I.GOLD_AXE]: tool(I.GOLD_AXE, "Golden Axe", "axe", 1, 8, 3, 0xf7d33c, 0xb8901a, "AXE"),
+  [I.GOLD_SHOVEL]: tool(I.GOLD_SHOVEL, "Golden Shovel", "shovel", 1, 8.4, 2, 0xf7d33c, 0xb8901a, "SHVL"),
   [I.BOW]: tool(I.BOW, "Bow", "bow", 0, 1, 7, 0x9a6b33, 0xe8e0cd, "BOW"),
 
   [I.BUCKET]: special(I.BUCKET, "Bucket", "bucket", 0xdadada, 0x8c8c8c, 16),
@@ -196,6 +206,7 @@ export const ITEMS: Record<number, ItemDef> = {
   [I.LEATHER_COAT]: special(I.LEATHER_COAT, "Warm Leather Coat", "armor", 0xa0714a, 0xc69368, 1, 8),
   [I.IRON_CHESTPLATE]: special(I.IRON_CHESTPLATE, "Iron Chestplate", "armor", 0xdadada, 0xf0f0f0, 1, 4),
   [I.DIAMOND_CHESTPLATE]: special(I.DIAMOND_CHESTPLATE, "Diamond Chestplate", "armor", 0x5de3e3, 0xc7fbfb, 1, 6),
+  [I.GOLD_CHESTPLATE]: special(I.GOLD_CHESTPLATE, "Golden Chestplate", "armor", 0xf7d33c, 0xfff0a0, 1, 5),
 
   [I.STICK]: material(I.STICK, "Stick", "stick", 0x9a6b33, 0x6f4a25),
   [I.COAL]: material(I.COAL, "Coal", "nugget", 0x2e3134, 0x55595c),
@@ -228,6 +239,7 @@ export const ITEMS: Record<number, ItemDef> = {
   [I.MELON_SLICE]: food(I.MELON_SLICE, "Melon Slice", "food", 0xd2342b, 0x6f9c2b, 2, 1),
   [I.RAW_CHICKEN]: food(I.RAW_CHICKEN, "Raw Chicken", "meat", 0xf3c9b4, 0xe0a88e, 2, 0),
   [I.COOKED_CHICKEN]: food(I.COOKED_CHICKEN, "Cooked Chicken", "meat", 0xc98a4a, 0xe7b57a, 6, 4),
+  [I.GOLDEN_APPLE]: food(I.GOLDEN_APPLE, "Golden Apple", "food", 0xf7d33c, 0x4e8f3c, 10, 3),
   [I.PUMPKIN_PIE]: food(I.PUMPKIN_PIE, "Pumpkin Pie", "food", 0xc8782a, 0xf0b060, 8, 0),
   [I.EGG]: material(I.EGG, "Egg", "nugget", 0xf2e6cf, 0xffffff),
 };
@@ -235,6 +247,7 @@ export const ITEMS: Record<number, ItemDef> = {
 /** armor points per chestplate; each point cuts incoming damage by 5% */
 export const ARMOR_POINTS: Record<number, number> = {
   [I.LEATHER_COAT]: 3,
+  [I.GOLD_CHESTPLATE]: 5,
   [I.IRON_CHESTPLATE]: 6,
   [I.DIAMOND_CHESTPLATE]: 8,
 };
@@ -408,6 +421,12 @@ export const RECIPES: Recipe[] = [
   // Armor & Coats (Warmth for cold mode!)
   shaped("leather-coat", I.LEATHER_COAT, 1, ["L L", "LLL", "LLL"], { L: I.LEATHER }),
   shaped("iron-chestplate", I.IRON_CHESTPLATE, 1, ["I I", "III", "III"], { I: I.IRON_INGOT }),
+  shaped("gold-chestplate", I.GOLD_CHESTPLATE, 1, ["G G", "GGG", "GGG"], { G: I.GOLD_INGOT }),
+  shaped("golden-apple", I.GOLDEN_APPLE, 1, ["GGG", "GAG", "GGG"], { G: I.GOLD_INGOT, A: I.APPLE }),
+  shaped("gold-pick", I.GOLD_PICK, 1, ["MMM", " S ", " S "], { M: I.GOLD_INGOT, S: I.STICK }),
+  shaped("gold-axe", I.GOLD_AXE, 1, ["MM", "MS", " S"], { M: I.GOLD_INGOT, S: I.STICK }),
+  shaped("gold-shovel", I.GOLD_SHOVEL, 1, ["M", "S", "S"], { M: I.GOLD_INGOT, S: I.STICK }),
+  shaped("gold-sword", I.GOLD_SWORD, 1, ["M", "M", "S"], { M: I.GOLD_INGOT, S: I.STICK }),
   shaped("diamond-chestplate", I.DIAMOND_CHESTPLATE, 1, ["D D", "DDD", "DDD"], { D: I.DIAMOND }),
 
   // Tools & Weapons
@@ -574,10 +593,11 @@ export const CREATIVE_GROUPS: { name: string; items: number[] }[] = [
       I.DIAMOND_PICK, I.IRON_PICK, I.STONE_PICK, I.WOOD_PICK,
       I.DIAMOND_AXE, I.IRON_AXE, I.STONE_AXE, I.WOOD_AXE,
       I.DIAMOND_SHOVEL, I.IRON_SHOVEL, I.STONE_SHOVEL, I.WOOD_SHOVEL,
+      I.GOLD_PICK, I.GOLD_AXE, I.GOLD_SHOVEL, I.GOLD_SWORD,
       I.DIAMOND_SWORD, I.PORTAL_SWORD, I.MONKEY_SWORD, I.NEST_SWORD, I.WAX_SWORD, I.MANDRAKE_SWORD, I.IRON_SWORD, I.STONE_SWORD, I.WOOD_SWORD,
       I.BOW, I.ARROW, I.FLINT_AND_STEEL, I.SHEARS,
       I.BUCKET, I.WATER_BUCKET, I.LAVA_BUCKET, I.SNOWBALL,
-      I.LEATHER_COAT, I.IRON_CHESTPLATE, I.DIAMOND_CHESTPLATE,
+      I.LEATHER_COAT, I.GOLD_CHESTPLATE, I.IRON_CHESTPLATE, I.DIAMOND_CHESTPLATE,
     ],
   },
   {
@@ -618,7 +638,7 @@ export const CREATIVE_GROUPS: { name: string; items: number[] }[] = [
   {
     name: "Food",
     items: [
-      I.APPLE, I.BREAD, I.PUMPKIN_PIE, I.COOKED_PORK, I.STEAK, I.COOKED_CHICKEN,
+      I.APPLE, I.GOLDEN_APPLE, I.BREAD, I.PUMPKIN_PIE, I.COOKED_PORK, I.STEAK, I.COOKED_CHICKEN,
       I.RAW_PORK, I.RAW_BEEF, I.RAW_CHICKEN, I.MELON_SLICE,
       I.EGG, I.WHEAT, I.STICK, I.STRING, I.FEATHER, I.LEATHER, I.FLINT, I.BONE, I.CLAY_BALL, I.BRICK,
     ],
