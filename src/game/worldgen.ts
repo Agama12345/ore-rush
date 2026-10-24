@@ -1,7 +1,7 @@
 import { B } from "./blocks";
 
 export const CHUNK_SIZE = 16;
-export const WORLD_HEIGHT = 128;
+export const WORLD_HEIGHT = 256;
 export const SEA_LEVEL = 34;
 export const CHUNK_VOLUME = CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT;
 
