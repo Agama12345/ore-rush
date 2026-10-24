@@ -502,6 +502,8 @@ function decorate(
     }
   }
 
+  decorateStructures(cx, cz, blocks, opts);
+
   /* Ground cover */
   for (let lz = 0; lz < CHUNK_SIZE; lz++) {
     for (let lx = 0; lx < CHUNK_SIZE; lx++) {
@@ -582,6 +584,98 @@ function decorate(
         const wx = cx * CHUNK_SIZE + lx;
         const wz = cz * CHUNK_SIZE + lz;
         if (hash2(wx * 4.4, wz * 6.6, seed + 707) > 0.97) placeIfAir(blocks, lx, SEA_LEVEL + 1, lz, B.LILY_PAD);
+      }
+    }
+  }
+}
+
+/* ---------------- Ruins & wells ----------------
+ * One candidate site per 48x48 region, found from the seed alone, so a structure that
+ * crosses a chunk border is built identically by both chunks. */
+const REGION = 48;
+
+function setIn(blocks: Uint8Array, lx: number, y: number, lz: number, id: number) {
+  if (lx < 0 || lz < 0 || lx >= CHUNK_SIZE || lz >= CHUNK_SIZE || y < 1 || y >= WORLD_HEIGHT) return;
+  blocks[blockIndex(lx, y, lz)] = id;
+}
+
+function decorateStructures(cx: number, cz: number, blocks: Uint8Array, opts: GenOptions) {
+  const { seed, coldMode } = opts;
+  if (coldMode) return;
+  const minX = cx * CHUNK_SIZE - 6;
+  const maxX = cx * CHUNK_SIZE + CHUNK_SIZE + 6;
+  const minZ = cz * CHUNK_SIZE - 6;
+  const maxZ = cz * CHUNK_SIZE + CHUNK_SIZE + 6;
+
+  for (let gz = Math.floor(minZ / REGION); gz <= Math.floor(maxZ / REGION); gz++) {
+    for (let gx = Math.floor(minX / REGION); gx <= Math.floor(maxX / REGION); gx++) {
+      if (hash2(gx * 13.1, gz * 7.7, seed + 9001) < 0.5) continue;
+      const sx = gx * REGION + 8 + Math.floor(hash2(gx * 3.3, gz * 9.1, seed + 9002) * (REGION - 16));
+      const sz = gz * REGION + 8 + Math.floor(hash2(gx * 5.9, gz * 2.7, seed + 9003) * (REGION - 16));
+      if (sx < minX || sx > maxX || sz < minZ || sz > maxZ) continue;
+
+      const { height, biome } = sampleColumn(sx, sz, seed);
+      if (height <= SEA_LEVEL + 2 || biome === Biome.OCEAN || biome === Biome.BEACH || biome === Biome.SNOWY || biome === Biome.MOUNTAINS) continue;
+
+      const well = hash2(gx * 1.7, gz * 8.3, seed + 9004) < (biome === Biome.DESERT ? 0.6 : 0.3);
+      const base = height;
+      const x0 = sx - 2;
+      const z0 = sz - 2;
+      const rough = (x: number, y: number, z: number) => {
+        const r = hash3(x, y, z, seed + 9005);
+        return r < 0.3 ? B.MOSSY : r < 0.65 ? B.STONE_BRICKS : B.COBBLE;
+      };
+
+      // level the site: foundation under low ground, clear anything above the floor
+      for (let dz = 0; dz < 5; dz++) {
+        for (let dx = 0; dx < 5; dx++) {
+          const wx = x0 + dx;
+          const wz = z0 + dz;
+          const ground = sampleColumn(wx, wz, seed).height;
+          for (let y = ground + 1; y < base; y++) setIn(blocks, wx - cx * CHUNK_SIZE, y, wz - cz * CHUNK_SIZE, B.COBBLE);
+          for (let y = base + 1; y <= base + 7; y++) setIn(blocks, wx - cx * CHUNK_SIZE, y, wz - cz * CHUNK_SIZE, 0);
+          setIn(blocks, wx - cx * CHUNK_SIZE, base, wz - cz * CHUNK_SIZE, rough(wx, base, wz));
+        }
+      }
+
+      for (let dz = 0; dz < 5; dz++) {
+        for (let dx = 0; dx < 5; dx++) {
+          const wx = x0 + dx;
+          const wz = z0 + dz;
+          const lx = wx - cx * CHUNK_SIZE;
+          const lz = wz - cz * CHUNK_SIZE;
+          const edge = dx === 0 || dz === 0 || dx === 4 || dz === 4;
+          if (well) {
+            // 5x5 courtyard with a 3x3 well in the middle
+            const ring = dx >= 1 && dx <= 3 && dz >= 1 && dz <= 3;
+            const centre = dx === 2 && dz === 2;
+            if (centre) {
+              setIn(blocks, lx, base, lz, B.WATER);
+              setIn(blocks, lx, base - 1, lz, B.WATER);
+            } else if (ring) {
+              setIn(blocks, lx, base + 1, lz, rough(wx, base + 1, wz));
+              if ((dx === 1 || dx === 3) && (dz === 1 || dz === 3)) {
+                for (let y = base + 2; y <= base + 3; y++) setIn(blocks, lx, y, lz, B.PLANKS);
+              }
+            }
+            continue;
+          }
+          if (!edge) continue;
+          const door = dz === 0 && dx === 2;
+          for (let y = base + 1; y <= base + 4; y++) {
+            if (door && y <= base + 2) continue;
+            // the upper courses have crumbled away in places
+            if (y >= base + 3 && hash3(wx, y, wz, seed + 9006) < 0.45) continue;
+            setIn(blocks, lx, y, lz, rough(wx, y, wz));
+          }
+        }
+      }
+      if (!well) {
+        const lx = sx - cx * CHUNK_SIZE;
+        const lz = sz - cz * CHUNK_SIZE;
+        setIn(blocks, lx, base + 1, lz, B.GOLD);
+        setIn(blocks, lx - 1, base + 1, lz - 1, B.TORCH);
+        setIn(blocks, lx + 1, base + 1, lz + 1, B.TORCH);
       }
     }
   }
