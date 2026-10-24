@@ -638,4 +638,5 @@ export const MOB_DROPS: Record<number, Drop[]> = {
   4: [D(I.RAW_CHICKEN, 1, 1), D(I.FEATHER, 1, 3), D(I.EGG, 0, 1, 0.4)],
   5: [D(I.BONE, 1, 3), D(I.ARROW, 1, 4), D(I.BOW, 1, 1, 0.15)], // Skeleton
   6: [D(I.REDSTONE, 2, 5), D(I.COAL, 1, 3)], // Creeper
+  7: [D(I.STRING, 0, 2), D(I.BONE, 0, 1, 0.2)], // Spider
 };

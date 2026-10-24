@@ -2638,8 +2638,8 @@ export class VoxelGame {
       timer: 0,
       walk: 0,
       kind,
-      hp: kind === 3 ? 20 : kind === 4 ? 4 : 10,
-      hostile: kind === 3,
+      hp: kind === 3 || kind === 5 || kind === 6 ? 20 : kind === 7 ? 16 : kind === 4 ? 4 : 10,
+      hostile: kind === 3 || kind === 5 || kind === 6 || kind === 7,
       hurt: 0,
       attackCd: 0,
       flee: 0,
@@ -2678,7 +2678,9 @@ export class VoxelGame {
       const hostile = night && Math.random() < (this.mode === "survival" ? 0.7 : 0.55);
       const roll = Math.random();
       const passive = roll < 0.27 ? 0 : roll < 0.52 ? 1 : roll < 0.77 ? 2 : 4;
-      this.mobs.push(this.createMob(hostile ? 3 : passive, x + 0.5, col.height + 1.02, z + 0.5));
+      const pick = Math.random();
+      const hostileKind = pick < 0.4 ? MOB.ZOMBIE : pick < 0.62 ? MOB.SKELETON : pick < 0.82 ? MOB.CREEPER : MOB.SPIDER;
+      this.mobs.push(this.createMob(hostile ? hostileKind : passive, x + 0.5, col.height + 1.02, z + 0.5));
     }
   }
 
@@ -2918,10 +2920,11 @@ export class VoxelGame {
         }
       } else if (mob.hostile && distToPlayer < 18) {
         mob.dir = Math.atan2(dz, dx);
-        speed = 2.5;
-        if (distToPlayer < 1.6 && Math.abs(this.player.pos.y - p.y) < 2 && mob.attackCd <= 0) {
-          mob.attackCd = 1.1;
-          this.damagePlayer(3, "zombie");
+        const spider = mob.kind === MOB.SPIDER;
+        speed = spider ? 3.5 : 2.5;
+        if (distToPlayer < (spider ? 1.8 : 1.6) && Math.abs(this.player.pos.y - p.y) < 2 && mob.attackCd <= 0) {
+          mob.attackCd = spider ? 0.9 : 1.1;
+          this.damagePlayer(spider ? 2 : 3, spider ? "spider" : "zombie");
         }
       } else if (mob.flee > 0) {
         if (mob.timer <= 0) {

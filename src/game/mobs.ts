@@ -19,6 +19,7 @@ export const MOB = {
   CHICKEN: 4,
   SKELETON: 5,
   CREEPER: 6,
+  SPIDER: 7,
 } as const;
 
 export type MobModel = {
@@ -71,6 +72,9 @@ const enum Tile {
   CreeperBody,
   CreeperFace,
   CreeperFoot,
+  SpiderFur,
+  SpiderFace,
+  SpiderLeg,
 }
 
 type Rng = () => number;
@@ -283,6 +287,24 @@ function buildAtlas(): THREE.CanvasTexture {
     px(3, 5, "#181818"); px(4, 5, "#181818");
   });
   paint(ctx, Tile.CreeperFoot, (_px, fill) => fill(["#3a8436", "#2f6c2c"]));
+
+  // Spider
+  paint(ctx, Tile.SpiderFur, (px, fill, r) => {
+    fill(["#3b312b", "#2f2723", "#463a33"]);
+    for (let i = 0; i < 5; i++) px(Math.floor(r() * 8), Math.floor(r() * 8), "#1d1815");
+  });
+  paint(ctx, Tile.SpiderFace, (px, fill) => {
+    fill(["#3b312b", "#332a25"]);
+    [1, 2, 5, 6].forEach((x) => px(x, 2, "#c4262e"));
+    px(3, 2, "#7a1418");
+    px(4, 2, "#7a1418");
+    px(3, 5, "#1d1815");
+    px(4, 5, "#1d1815");
+  });
+  paint(ctx, Tile.SpiderLeg, (px, fill, r) => {
+    fill(["#2a221e", "#352c27"]);
+    for (let i = 0; i < 3; i++) px(Math.floor(r() * 8), Math.floor(r() * 8), "#4a3d35");
+  });
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.magFilter = THREE.NearestFilter;
@@ -528,6 +550,33 @@ export function createMobModel(kind: number): MobModel {
     });
     height = 1.95;
     width = 0.6;
+  } else if (kind === MOB.SPIDER) {
+    const abdomen = box(0.7, 0.5, 0.85, { all: Tile.SpiderFur }, material);
+    abdomen.position.set(0, 0.55, -0.45);
+    const thorax = box(0.5, 0.4, 0.5, { all: Tile.SpiderFur }, material);
+    thorax.position.set(0, 0.5, 0.05);
+    body.add(abdomen, thorax);
+
+    const headPivot = new THREE.Group();
+    headPivot.position.set(0, 0.5, 0.32);
+    const skull = box(0.42, 0.38, 0.4, { all: Tile.SpiderFur, front: Tile.SpiderFace }, material);
+    skull.position.set(0, 0, 0.2);
+    headPivot.add(skull);
+    body.add(headPivot);
+    head = headPivot;
+
+    // 8 splayed legs: 4 per side
+    [-1, 1].forEach((side) => {
+      [0.22, 0.04, -0.14, -0.32].forEach((z, i) => {
+        const leg = limb(side * 0.24, 0.52, z, 0.1, 0.7, 0.1, { all: Tile.SpiderLeg }, material);
+        leg.rotation.z = side * (1.05 + i * 0.05);
+        leg.rotation.y = side * (0.35 - i * 0.2);
+        body.add(leg);
+        legs.push(leg);
+      });
+    });
+    height = 0.9;
+    width = 1.1;
   } else if (kind === MOB.CREEPER) {
     // Creeper
     const torso = box(0.5, 0.72, 0.26, { all: Tile.CreeperBody }, material);

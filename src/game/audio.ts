@@ -1093,6 +1093,9 @@ export class SoundEngine {
       case 6:
         this.creeperHiss();
         break;
+      case 7:
+        this.tone(900, 0.12, { type: "sawtooth", vol: 0.14, slide: 600 });
+        break;
       default:
         this.pigOink();
     }
@@ -1118,6 +1121,9 @@ export class SoundEngine {
         break;
       case 5:
         this.skeletonRattle();
+        break;
+      case 7:
+        this.tone(760, 0.2, { type: "sawtooth", vol: 0.22, slide: 420 });
         break;
       default:
         this.tone(200, 0.2, { type: "square", vol: 0.2 });
