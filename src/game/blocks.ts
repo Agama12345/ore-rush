@@ -381,6 +381,9 @@ export const BLOCKS: Record<number, BlockDef> = {
   [B.BED]: def({ id: B.BED, name: "Bed", color: 0xb83b3b, hardness: 0.3, score: 6, tool: "axe" }, { top: T.BED_TOP, side: T.BED_SIDE }),
 };export const ORE_IDS = [B.COAL, B.IRON, B.GOLD, B.REDSTONE, B.LAPIS, B.DIAMOND, B.EMERALD];
 
+/** blocks that can lie on their side (axis X or Z) when placed against a wall */
+export const LOG_BLOCKS = new Set<number>([B.LOG, B.BIRCH_LOG, B.SPRUCE_LOG, B.JUNGLE_LOG, B.ACACIA_LOG]);
+
 export const WARMTH_BLOCKS = [B.CAMPFIRE, B.LAVA];
 export const COLD_BLOCKS = [B.ICE, B.SNOW, B.SNOW_GRASS];
 

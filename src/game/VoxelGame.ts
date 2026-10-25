@@ -4,6 +4,7 @@ import {
   B,
   BLOCKS,
   CAMPFIRE_ATLAS,
+  LOG_BLOCKS,
   getAtlas,
   isCross,
   isLiquid,
@@ -415,6 +416,8 @@ export class VoxelGame {
   private chests = new Map<string, HotbarSlot[]>();
   /** every block the player (or fluids/TNT) changed, per chunk, so a world can be saved and rebuilt from its seed */
   private edits = new Map<string, Map<number, number>>();
+  /** per-block orientation: logs 1 = lying along X, 2 = along Z; campfire 1 = turned 90 degrees */
+  private orient = new Map<string, Map<number, number>>();
   private saveTimer = 0;
   private chestKey: string | null = null;
   private lightTint = new THREE.Color(1, 1, 1);
@@ -626,6 +629,7 @@ export class VoxelGame {
     this.sfx.setBlizzard(mode === "cold");
     if (this.container) this.closeContainer(true);
     this.edits.clear();
+    this.orient.clear();
     this.prepareWorld(Math.floor(Math.random() * 1_000_000), mode === "sprint");
     this.furnaces.clear();
     this.chests.clear();
@@ -665,6 +669,7 @@ export class VoxelGame {
       mode: this.mode,
       seed: this.seed,
       edits,
+      orient: Object.fromEntries([...this.orient.entries()].map(([key, map]) => [key, [...map.entries()].flat()])),
       hotbar: slots(this.hotbar),
       backpack: slots(this.backpack),
       health: this.health,
@@ -707,6 +712,12 @@ export class VoxelGame {
       const map = new Map<number, number>();
       for (let i = 0; i + 1 < flat.length; i += 2) map.set(flat[i], flat[i + 1]);
       this.edits.set(key, map);
+    });
+    this.orient.clear();
+    Object.entries((data.orient ?? {}) as Record<string, number[]>).forEach(([key, flat]) => {
+      const map = new Map<number, number>();
+      for (let i = 0; i + 1 < flat.length; i += 2) map.set(flat[i], flat[i + 1]);
+      this.orient.set(key, map);
     });
     this.prepareWorld(data.seed, false);
     this.cursor = this.emptySlot();
@@ -1140,6 +1151,14 @@ export class VoxelGame {
     }
 
     this.setBlock(x, y, z, def.id);
+    if (LOG_BLOCKS.has(def.id) && !replaceHit) {
+      // a log set against a side wall lies along that wall's axis instead of standing up
+      if (this.target.nx !== 0) this.setOrient(x, y, z, 1);
+      else if (this.target.nz !== 0) this.setOrient(x, y, z, 2);
+    } else if (def.id === B.CAMPFIRE) {
+      this.camera.getWorldDirection(this.tempDir);
+      if (Math.abs(this.tempDir.x) > Math.abs(this.tempDir.z)) this.setOrient(x, y, z, 1);
+    }
     if (slot.count > 0) {
       slot.count -= 1;
       if (slot.count === 0 && this.mode !== "sprint") {
@@ -1245,6 +1264,16 @@ export class VoxelGame {
     return chunk.blocks[blockIndex(x - cx * CHUNK_SIZE, y, z - cz * CHUNK_SIZE)];
   }
 
+  private setOrient(x: number, y: number, z: number, value: number) {
+    const cx = Math.floor(x / CHUNK_SIZE);
+    const cz = Math.floor(z / CHUNK_SIZE);
+    const key = this.key(cx, cz);
+    let map = this.orient.get(key);
+    if (!map) this.orient.set(key, (map = new Map()));
+    map.set(blockIndex(x - cx * CHUNK_SIZE, y, z - cz * CHUNK_SIZE), value);
+    this.markDirty(cx, cz);
+  }
+
   private setBlock(x: number, y: number, z: number, id: number) {
     if (y < 0 || y >= WORLD_HEIGHT) return;
     const cx = Math.floor(x / CHUNK_SIZE);
@@ -1258,6 +1287,7 @@ export class VoxelGame {
     let chunkEdits = this.edits.get(chunkKey);
     if (!chunkEdits) this.edits.set(chunkKey, (chunkEdits = new Map()));
     chunkEdits.set(blockIndex(lx, y, lz), id);
+    this.orient.get(chunkKey)?.delete(blockIndex(lx, y, lz));
 
     const colIdx = lx + lz * CHUNK_SIZE;
     if (id !== 0 && y > chunk.heights[colIdx]) chunk.heights[colIdx] = y;
@@ -1946,6 +1976,8 @@ export class VoxelGame {
     const originX = chunk.cx * CHUNK_SIZE;
     const originZ = chunk.cz * CHUNK_SIZE;
 
+    const orientMap = this.orient.get(this.key(chunk.cx, chunk.cz));
+
     let maxY = SEA_LEVEL + 1;
     for (let i = 0; i < chunk.heights.length; i++) if (chunk.heights[i] > maxY) maxY = chunk.heights[i];
     maxY = Math.min(WORLD_HEIGHT - 1, maxY + 8);
@@ -1965,6 +1997,7 @@ export class VoxelGame {
             const shade = Math.min(1.25, light);
             const bx = originX + lx;
             const bz = originZ + lz;
+            const turned = orientMap?.get(blockIndex(lx, y, lz)) === 1;
             for (const el of CAMPFIRE_ELEMENTS) {
               const f = el.from;
               const t = el.to;
@@ -1976,7 +2009,9 @@ export class VoxelGame {
                   key[1] === "1" ? t[1] : f[1],
                   key[2] === "1" ? t[2] : f[2],
                 ];
-                return rotateModelPoint(p, origin, rot);
+                const q = rotateModelPoint(p, origin, rot);
+                // campfire turned a quarter turn around the block centre
+                return turned ? ([16 - q[2], q[1], q[0]] as [number, number, number]) : q;
               };
               for (const face of MODEL_FACE_LIST) {
                 const uv = el.faces[face.name]?.uv;
@@ -2060,7 +2095,19 @@ export class VoxelGame {
             if (!liquid && isLiquid(neighbour) && face.kind === "bottom") continue;
             if (id === B.LILY_PAD && face.kind !== "top") continue;
 
-            const tile = face.kind === "top" ? def.top : face.kind === "bottom" ? def.bottom : def.side;
+            let tile = face.kind === "top" ? def.top : face.kind === "bottom" ? def.bottom : def.side;
+            let rotUV = false;
+            const o = LOG_BLOCKS.has(id) ? orientMap?.get(blockIndex(lx, y, lz)) ?? 0 : 0;
+            if (o) {
+              const logAxis = o === 1 ? 0 : 2;
+              if (face.n[logAxis] !== 0) tile = def.top;
+              else {
+                tile = def.side;
+                // bark lines run along c0->c3 on the texture; turn it when that is not the log's axis
+                const vAxis = face.c[3][0] !== face.c[0][0] ? 0 : face.c[3][1] !== face.c[0][1] ? 1 : 2;
+                rotUV = vAxis !== logAxis;
+              }
+            }
             const rect = tileUV(tile);
             const target = alphaPass ? buffers.water : foliage ? buffers.cutout : buffers.opaque;
             const base = target.count;
@@ -2071,7 +2118,12 @@ export class VoxelGame {
               const corner = face.c[c];
               const yOffset = liquid && face.kind === "top" ? -0.1 : id === B.LILY_PAD ? -0.92 : 0;
               target.pos.push(originX + lx + corner[0], y + corner[1] + yOffset, originZ + lz + corner[2]);
-              if (c === 0) target.uv.push(rect[0], rect[1]);
+              if (rotUV) {
+                if (c === 0) target.uv.push(rect[0], rect[1]);
+                else if (c === 1) target.uv.push(rect[0], rect[3]);
+                else if (c === 2) target.uv.push(rect[2], rect[3]);
+                else target.uv.push(rect[2], rect[1]);
+              } else if (c === 0) target.uv.push(rect[0], rect[1]);
               else if (c === 1) target.uv.push(rect[2], rect[1]);
               else if (c === 2) target.uv.push(rect[2], rect[3]);
               else target.uv.push(rect[0], rect[3]);

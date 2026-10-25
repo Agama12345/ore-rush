@@ -383,10 +383,15 @@ export class SoundEngine {
     throatRoughness?: number;
     tremoloRate?: number;
     tremoloDepth?: number;
+    /** fast amplitude flutter (the trill in a bleat, the rasp in a growl) */
+    flutterRate?: number;
+    flutterDepth?: number;
     delay?: number;
   }) {
     const ctx = this.ensure();
     if (!ctx || !this.dry || !this.reverbSend) return;
+    // every call is a little different, like a real animal
+    const varied = 0.95 + Math.random() * 0.1;
 
     const t0 = ctx.currentTime + (opts.delay ?? 0);
     const dur = opts.duration;
@@ -400,17 +405,35 @@ export class SoundEngine {
     masterGain.connect(this.dry);
     masterGain.connect(this.reverbSend);
 
-    // Multi-saw/tri glottal source
+    // Glottal source: saw + triangle with the harsh top end rolled off, so it does not buzz like a synth
     const sourceBus = ctx.createGain();
     sourceBus.gain.value = 0.5;
+    const tilt = ctx.createBiquadFilter();
+    tilt.type = "lowpass";
+    tilt.frequency.value = 2600;
+    tilt.Q.value = 0.4;
+    const voiced = ctx.createGain();
+    voiced.gain.value = 1;
+    sourceBus.connect(tilt).connect(voiced);
+    if (opts.flutterRate) {
+      const flutter = ctx.createOscillator();
+      flutter.frequency.value = opts.flutterRate * (0.9 + Math.random() * 0.2);
+      const depth = ctx.createGain();
+      depth.gain.value = opts.flutterDepth ?? 0.3;
+      voiced.gain.value = 1 - (opts.flutterDepth ?? 0.3) * 0.5;
+      flutter.connect(depth).connect(voiced.gain);
+      flutter.start(t0);
+      flutter.stop(t0 + dur + 0.05);
+    }
 
     const oscCount = opts.throatRoughness ? 3 : 2;
     for (let i = 0; i < oscCount; i++) {
       const osc = ctx.createOscillator();
-      osc.type = i === 0 ? "sawtooth" : i === 1 ? "triangle" : "sawtooth";
-      const detune = (i - 1) * (opts.throatRoughness ?? 0.15) * 12;
+      osc.type = i === 1 ? "triangle" : "sawtooth";
+      // tiny fixed detune only: big detune beats and sounds metallic
+      const detune = (i - 1) * Math.min(3, (opts.throatRoughness ?? 0.15) * 4);
 
-      const pitches = opts.pitchTrack;
+      const pitches = opts.pitchTrack.map((p) => p * varied);
       const stepTime = dur / Math.max(1, pitches.length - 1);
       osc.frequency.setValueAtTime(pitches[0], t0);
       for (let p = 1; p < pitches.length; p++) {
@@ -429,6 +452,20 @@ export class SoundEngine {
         lfo.stop(t0 + dur + 0.05);
       }
 
+      // slow random pitch wander (vocal-fold jitter)
+      if (this.pinkNoiseBuffer) {
+        const wander = ctx.createBufferSource();
+        wander.buffer = this.pinkNoiseBuffer;
+        const wl = ctx.createBiquadFilter();
+        wl.type = "lowpass";
+        wl.frequency.value = 18;
+        const wg = ctx.createGain();
+        wg.gain.value = pitches[0] * 0.05;
+        wander.connect(wl).connect(wg).connect(osc.frequency);
+        wander.start(t0, Math.random());
+        wander.stop(t0 + dur + 0.05);
+      }
+
       osc.connect(sourceBus);
       osc.start(t0);
       osc.stop(t0 + dur + 0.05);
@@ -438,7 +475,7 @@ export class SoundEngine {
     opts.formants.forEach((fmt, idx) => {
       const bp = ctx.createBiquadFilter();
       bp.type = "bandpass";
-      bp.Q.value = fmt.q;
+      bp.Q.value = fmt.q * 0.65;
       bp.frequency.setValueAtTime(fmt.f, t0);
       if (opts.formantsEnd && opts.formantsEnd[idx]) {
         bp.frequency.exponentialRampToValueAtTime(opts.formantsEnd[idx].f, t0 + dur * 0.9);
@@ -446,7 +483,7 @@ export class SoundEngine {
 
       const fg = ctx.createGain();
       fg.gain.value = fmt.gain;
-      sourceBus.connect(bp).connect(fg).connect(masterGain);
+      voiced.connect(bp).connect(fg).connect(masterGain);
     });
 
     // Throat noise / breath
@@ -552,12 +589,30 @@ export class SoundEngine {
           { f: 1250, gain: 0.8, q: 5.0 },
           { f: 2600, gain: 0.4, q: 6.0 },
         ],
-        volume: 0.32,
+        volume: 0.34,
         throatRoughness: 0.65,
-        tremoloRate: 32,
-        tremoloDepth: 18,
+        flutterRate: 38,
+        flutterDepth: 0.35,
       });
+      this.noise(0.05, 0.05, 900, "bandpass", i * 0.22, 1.2, true);
     }
+  }
+
+  pigSqueal() {
+    if (!this.throttle("pig_squeal", 0.5)) return;
+    this.vocalize({
+      pitchTrack: [380, 640, 520, 330],
+      duration: 0.38,
+      formants: [
+        { f: 650, gain: 1.1, q: 4.5 },
+        { f: 1700, gain: 0.8, q: 5.0 },
+        { f: 3000, gain: 0.3, q: 5.5 },
+      ],
+      volume: 0.34,
+      throatRoughness: 0.4,
+      flutterRate: 30,
+      flutterDepth: 0.3,
+    });
   }
 
   // Authentic Minecraft Sheep Baa
@@ -577,10 +632,30 @@ export class SoundEngine {
         { f: 1350, gain: 0.7, q: 6.0 },
         { f: 2500, gain: 0.25, q: 6.5 },
       ],
+      volume: 0.34,
+      throatRoughness: 0.4,
+      tremoloRate: 6,
+      tremoloDepth: 10,
+      flutterRate: 42,
+      flutterDepth: 0.4,
+    });
+  }
+
+  sheepHurt() {
+    if (!this.throttle("sheep_hurt", 0.5)) return;
+    const baseF = 340 + Math.random() * 40;
+    this.vocalize({
+      pitchTrack: [baseF, baseF * 1.3, baseF * 1.1],
+      duration: 0.4,
+      formants: [
+        { f: 720, gain: 1.1, q: 5.0 },
+        { f: 1700, gain: 0.8, q: 6.0 },
+        { f: 2800, gain: 0.3, q: 6.5 },
+      ],
       volume: 0.32,
       throatRoughness: 0.4,
-      tremoloRate: 8.5,
-      tremoloDepth: 24,
+      flutterRate: 46,
+      flutterDepth: 0.4,
     });
   }
 
@@ -589,14 +664,20 @@ export class SoundEngine {
     if (!this.throttle("chicken_cluck", 0.6)) return;
     const clucks = 2 + Math.floor(Math.random() * 2);
     for (let i = 0; i < clucks; i++) {
-      const f = 580 + Math.random() * 120;
-      this.tone(f, 0.07, {
-        type: "triangle",
-        vol: 0.16,
-        slide: f * 0.72,
-        delay: i * 0.11,
+      const f = 520 + Math.random() * 140;
+      this.vocalize({
+        pitchTrack: [f * 1.1, f * 0.8],
+        duration: 0.1,
+        delay: i * 0.13,
+        formants: [
+          { f: 900, gain: 1.2, q: 3.5 },
+          { f: 2100, gain: 0.8, q: 4.0 },
+        ],
+        volume: 0.22,
+        throatRoughness: 0.5,
+        flutterRate: 55,
+        flutterDepth: 0.3,
       });
-      this.noise(0.05, 0.08, 2200, "bandpass", i * 0.11, 2.0);
     }
   }
 
@@ -620,8 +701,40 @@ export class SoundEngine {
       volume: 0.42,
       throatRoughness: 0.85,
       tremoloRate: 3.5,
-      tremoloDepth: 6.0,
+      tremoloDepth: 4.0,
+      flutterRate: 16,
+      flutterDepth: 0.35,
     });
+  }
+
+  zombieHurt() {
+    if (!this.throttle("zombie_hurt", 0.4)) return;
+    const baseF = 95 + Math.random() * 20;
+    this.vocalize({
+      pitchTrack: [baseF * 1.4, baseF, baseF * 0.75],
+      duration: 0.34,
+      formants: [
+        { f: 520, gain: 1.2, q: 4.0 },
+        { f: 1050, gain: 0.7, q: 4.5 },
+        { f: 2200, gain: 0.2, q: 5.0 },
+      ],
+      volume: 0.4,
+      throatRoughness: 0.8,
+      flutterRate: 24,
+      flutterDepth: 0.4,
+    });
+  }
+
+  /** dry clicking and hissing, a spider chittering */
+  spiderChitter() {
+    if (!this.throttle("spider_chitter", 0.5)) return;
+    const n = 5 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) {
+      const d = i * (0.045 + Math.random() * 0.02);
+      this.noise(0.03, 0.14, 2600 + Math.random() * 1600, "bandpass", d, 3.0);
+      this.click(0.1, d, 4200);
+    }
+    this.noise(0.35, 0.07, 6200, "highpass", 0.02, 0.8, true);
   }
 
   // Skeleton rattle & bow
@@ -1094,7 +1207,7 @@ export class SoundEngine {
         this.creeperHiss();
         break;
       case 7:
-        this.tone(900, 0.12, { type: "sawtooth", vol: 0.14, slide: 600 });
+        this.spiderChitter();
         break;
       default:
         this.pigOink();
@@ -1105,16 +1218,16 @@ export class SoundEngine {
     this.hit();
     switch (kind) {
       case 0:
-        this.tone(260, 0.18, { type: "sawtooth", vol: 0.25, slide: 180 });
+        this.pigSqueal();
         break;
       case 1:
-        this.tone(420, 0.22, { type: "triangle", vol: 0.22, slide: 320 });
+        this.sheepHurt();
         break;
       case 2:
         this.cowMoo();
         break;
       case 3:
-        this.tone(130, 0.32, { type: "sawtooth", vol: 0.3, slide: 75 });
+        this.zombieHurt();
         break;
       case 4:
         this.chickenCluck();
@@ -1123,7 +1236,7 @@ export class SoundEngine {
         this.skeletonRattle();
         break;
       case 7:
-        this.tone(760, 0.2, { type: "sawtooth", vol: 0.22, slide: 420 });
+        this.spiderChitter();
         break;
       default:
         this.tone(200, 0.2, { type: "square", vol: 0.2 });
