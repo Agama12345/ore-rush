@@ -191,6 +191,8 @@ export default function App() {
     );
     game.setSoundEnabled(!mutedRef.current);
     gameRef.current = game;
+    // test hook: open the page with #debug to reach the game object from the console
+    if (window.location.hash === "#debug") (window as unknown as { __oreRush?: unknown }).__oreRush = game;
     return () => {
       game.dispose();
       gameRef.current = null;

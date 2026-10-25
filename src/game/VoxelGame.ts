@@ -41,6 +41,7 @@ import {
   type Recipe,
 } from "./items";
 import { createMobModel, MOB, type MobModel } from "./mobs";
+import { FarTerrain } from "./farTerrain";
 import { localName, t } from "./i18n";
 import {
   BIOME_NAMES,
@@ -114,6 +115,9 @@ export type RunSummary = {
 
 /** how far (in blocks) a mob's voice can be heard */
 const MOB_HEARING_RANGE = 9;
+
+/** how far the low-detail horizon terrain reaches, in blocks */
+const FAR_VIEW = 1000;
 
 const SAVE_KEY = "oreRush.save.v1";
 
@@ -343,6 +347,9 @@ export class VoxelGame {
   private cutoutMaterial: THREE.MeshBasicMaterial;
   private waterMaterial: THREE.MeshBasicMaterial;
   private worldGroup = new THREE.Group();
+  private far = new FarTerrain();
+  private farNearR = -1;
+  private farTimer = 0;
   private oreBoost = false;
 
   /* liquids */
@@ -501,7 +508,7 @@ export class VoxelGame {
     this.renderer.domElement.style.display = "block";
     this.host.appendChild(this.renderer.domElement);
 
-    this.camera = new THREE.PerspectiveCamera(70, 1, 0.08, 1000);
+    this.camera = new THREE.PerspectiveCamera(70, 1, 0.08, 1500);
     this.camera.rotation.order = "YXZ";
 
     this.opaqueMaterial = new THREE.MeshBasicMaterial({ map: this.atlasTexture, vertexColors: true });
@@ -521,7 +528,9 @@ export class VoxelGame {
       side: THREE.DoubleSide,
     });
 
-    this.scene.fog = new THREE.Fog(0x8fc7ff, 40, this.renderDistance * CHUNK_SIZE * 0.95);
+    this.scene.fog = new THREE.Fog(0x8fc7ff, this.renderDistance * CHUNK_SIZE * 0.55, FAR_VIEW * 0.97);
+    this.far.setRadius(this.isTouch ? FAR_VIEW / 2 : FAR_VIEW);
+    this.scene.add(this.far.group);
     this.scene.add(this.worldGroup, this.mobRoot, this.arrowRoot, this.dropRoot);
 
     this.skyMaterial = new THREE.ShaderMaterial({
@@ -548,6 +557,7 @@ export class VoxelGame {
     });
     this.sky = new THREE.Mesh(new THREE.SphereGeometry(480, 16, 12), this.skyMaterial);
     this.sky.frustumCulled = false;
+    this.sky.renderOrder = -10; // behind everything, including the distant terrain
     this.scene.add(this.sky);
 
     this.sun = new THREE.Mesh(new THREE.PlaneGeometry(52, 52), new THREE.MeshBasicMaterial({ color: 0xfff4c8, fog: false, transparent: true, depthWrite: false }));
@@ -851,8 +861,8 @@ export class VoxelGame {
   setRenderDistance(distance: number) {
     this.renderDistance = clamp(Math.round(distance), 3, 12);
     const fog = this.scene.fog as THREE.Fog;
-    fog.far = this.renderDistance * CHUNK_SIZE * 0.95;
-    fog.near = this.renderDistance * CHUNK_SIZE * 0.45;
+    fog.far = FAR_VIEW * 0.97;
+    fog.near = this.renderDistance * CHUNK_SIZE * 0.55;
   }
 
   setMoveInput(x: number, y: number) {
@@ -1203,6 +1213,7 @@ export class VoxelGame {
         else if (material) material.dispose();
       })
     );
+    this.far.dispose();
     this.atlasTexture.dispose();
     this.renderer.dispose();
     if (el.parentElement === this.host) this.host.removeChild(el);
@@ -1361,6 +1372,8 @@ export class VoxelGame {
 
   private prepareWorld(seed: number, oreBoost: boolean) {
     this.seed = seed;
+    this.far.reset(seed, this.mode === "cold");
+    this.farNearR = -1;
     this.oreBoost = oreBoost;
     this.chunks.forEach((chunk) => this.disposeChunkMeshes(chunk));
     this.chunks.clear();
@@ -2240,6 +2253,28 @@ export class VoxelGame {
       const chunk = this.chunks.get(key);
       if (chunk && chunk.dirty) this.buildChunkMesh(chunk);
     }
+  }
+
+  /** the horizon terrain is hidden only where real chunks are already meshed, so there are never gaps */
+  private updateFar(dt: number) {
+    const pcx = Math.floor(this.camera.position.x / CHUNK_SIZE);
+    const pcz = Math.floor(this.camera.position.z / CHUNK_SIZE);
+    this.farTimer -= dt;
+    if (this.farTimer <= 0) {
+      this.farTimer = 0.25;
+      const squareReady = (r: number) => {
+        for (let dz = -r; dz <= r; dz++) {
+          for (let dx = -r; dx <= r; dx++) {
+            if (!this.chunks.get(this.key(pcx + dx, pcz + dz))?.meshed) return false;
+          }
+        }
+        return true;
+      };
+      while (this.farNearR >= 0 && !squareReady(this.farNearR)) this.farNearR--;
+      while (this.farNearR < this.renderDistance && squareReady(this.farNearR + 1)) this.farNearR++;
+    }
+    const half = this.farNearR >= 0 ? (this.farNearR + 0.5) * CHUNK_SIZE : -1;
+    this.far.update(this.camera.position.x, this.camera.position.z, (pcx + 0.5) * CHUNK_SIZE, (pcz + 0.5) * CHUNK_SIZE, half, 3);
   }
 
   private loadedRatio() {
@@ -3206,6 +3241,7 @@ export class VoxelGame {
     if (horizonFactor > 0.2 && sunHeight > -0.2) tint.lerp(new THREE.Color(1, 0.82, 0.68), horizonFactor * 0.35);
     this.lightTint.copy(tint);
     this.opaqueMaterial.color.copy(tint);
+    this.far.setTint(tint);
     this.cutoutMaterial.color.copy(tint);
     this.waterMaterial.color.copy(tint).multiplyScalar(0.95);
     (this.clouds.material as THREE.MeshBasicMaterial).color.copy(tint).multiplyScalar(1.05);
@@ -4262,6 +4298,7 @@ export class VoxelGame {
     this.fovKick = Math.max(0, this.fovKick - dt * 9);
 
     this.updateStreaming(this.screen === "playing" ? (this.isTouch ? 5 : 7) : 9);
+    this.updateFar(dt);
     if (playing || this.screen === "menu") this.emitStats();
 
     this.renderer.render(this.scene, this.camera);
