@@ -1,9 +1,12 @@
 import { B } from "./blocks";
 
 export const CHUNK_SIZE = 16;
-export const WORLD_HEIGHT = 256;
+/** how high the player may build; chunk storage only grows that tall where someone actually builds */
+export const WORLD_HEIGHT = 1000;
+/** height of the generated terrain buffer (chunks start at this size) */
+export const GEN_HEIGHT = 256;
 export const SEA_LEVEL = 34;
-export const CHUNK_VOLUME = CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT;
+export const CHUNK_VOLUME = CHUNK_SIZE * CHUNK_SIZE * GEN_HEIGHT;
 
 export const Biome = {
   OCEAN: 0,
@@ -135,7 +138,7 @@ export function sampleColumn(wx: number, wz: number, seed: number, coldMode = fa
     height += m * m * 62;
   }
   if (height < SEA_LEVEL - 2) height = SEA_LEVEL - 2 - (SEA_LEVEL - 2 - height) * 0.75;
-  height = Math.max(3, Math.min(WORLD_HEIGHT - 10, Math.round(height)));
+  height = Math.max(3, Math.min(GEN_HEIGHT - 10, Math.round(height)));
 
   if (coldMode) {
     return {
@@ -244,7 +247,7 @@ export function generateChunk(
   cx: number,
   cz: number,
   blocks: Uint8Array,
-  heights: Uint8Array,
+  heights: Uint16Array,
   biomes: Uint8Array,
   opts: GenOptions
 ) {
@@ -368,7 +371,7 @@ function placeLeafSphere(
 }
 
 function placeIfAir(blocks: Uint8Array, lx: number, y: number, lz: number, id: number) {
-  if (lx < 0 || lz < 0 || lx >= CHUNK_SIZE || lz >= CHUNK_SIZE || y < 0 || y >= WORLD_HEIGHT) return;
+  if (lx < 0 || lz < 0 || lx >= CHUNK_SIZE || lz >= CHUNK_SIZE || y < 0 || y >= GEN_HEIGHT) return;
   const i = blockIndex(lx, y, lz);
   if (blocks[i] === 0) blocks[i] = id;
 }
@@ -446,7 +449,7 @@ function decorate(
   cx: number,
   cz: number,
   blocks: Uint8Array,
-  heights: Uint8Array,
+  heights: Uint16Array,
   biomes: Uint8Array,
   opts: GenOptions
 ) {
@@ -595,7 +598,7 @@ function decorate(
 const REGION = 48;
 
 function setIn(blocks: Uint8Array, lx: number, y: number, lz: number, id: number) {
-  if (lx < 0 || lz < 0 || lx >= CHUNK_SIZE || lz >= CHUNK_SIZE || y < 1 || y >= WORLD_HEIGHT) return;
+  if (lx < 0 || lz < 0 || lx >= CHUNK_SIZE || lz >= CHUNK_SIZE || y < 1 || y >= GEN_HEIGHT) return;
   blocks[blockIndex(lx, y, lz)] = id;
 }
 
@@ -682,7 +685,7 @@ function decorateStructures(cx: number, cz: number, blocks: Uint8Array, opts: Ge
 }
 
 export function columnTop(blocks: Uint8Array, lx: number, lz: number, skipLiquid = true): number {
-  for (let y = WORLD_HEIGHT - 1; y >= 0; y--) {
+  for (let y = Math.min(GEN_HEIGHT, Math.floor(blocks.length / (CHUNK_SIZE * CHUNK_SIZE))) - 1; y >= 0; y--) {
     const id = blocks[blockIndex(lx, y, lz)];
     if (id === 0) continue;
     if (skipLiquid && (id === B.WATER || id === B.LAVA)) continue;

@@ -242,7 +242,7 @@ type Chunk = {
   cx: number;
   cz: number;
   blocks: Uint8Array;
-  heights: Uint8Array;
+  heights: Uint16Array;
   biomes: Uint8Array;
   opaque: THREE.Mesh | null;
   cutout: THREE.Mesh | null;
@@ -1220,7 +1220,7 @@ export class VoxelGame {
       cx,
       cz,
       blocks: new Uint8Array(CHUNK_VOLUME),
-      heights: new Uint8Array(CHUNK_SIZE * CHUNK_SIZE),
+      heights: new Uint16Array(CHUNK_SIZE * CHUNK_SIZE),
       biomes: new Uint8Array(CHUNK_SIZE * CHUNK_SIZE),
       opaque: null,
       cutout: null,
@@ -1232,12 +1232,13 @@ export class VoxelGame {
     const saved = this.edits.get(key);
     if (saved) {
       saved.forEach((id, index) => {
+        this.ensureCapacity(chunk, index);
         chunk.blocks[index] = id;
       });
       for (let lz = 0; lz < CHUNK_SIZE; lz++) {
         for (let lx = 0; lx < CHUNK_SIZE; lx++) {
           let top = 0;
-          for (let y = WORLD_HEIGHT - 1; y >= 0; y--) {
+          for (let y = chunk.blocks.length / (CHUNK_SIZE * CHUNK_SIZE) - 1; y >= 0; y--) {
             if (chunk.blocks[blockIndex(lx, y, lz)] !== 0) {
               top = y;
               break;
@@ -1261,7 +1262,17 @@ export class VoxelGame {
     const cz = Math.floor(z / CHUNK_SIZE);
     const chunk = this.getChunk(cx, cz);
     if (!chunk) return 0;
-    return chunk.blocks[blockIndex(x - cx * CHUNK_SIZE, y, z - cz * CHUNK_SIZE)];
+    return chunk.blocks[blockIndex(x - cx * CHUNK_SIZE, y, z - cz * CHUNK_SIZE)] ?? 0;
+  }
+
+  /** chunks are stored 256 tall; the array grows (in 64-block steps) only where something is built higher */
+  private ensureCapacity(chunk: Chunk, index: number) {
+    if (index < chunk.blocks.length) return;
+    const layer = CHUNK_SIZE * CHUNK_SIZE;
+    const needed = Math.min(WORLD_HEIGHT, (Math.floor(index / layer) + 1 + 63) & ~63);
+    const bigger = new Uint8Array(needed * layer);
+    bigger.set(chunk.blocks);
+    chunk.blocks = bigger;
   }
 
   private setOrient(x: number, y: number, z: number, value: number) {
@@ -1282,6 +1293,10 @@ export class VoxelGame {
     if (!chunk) return;
     const lx = x - cx * CHUNK_SIZE;
     const lz = z - cz * CHUNK_SIZE;
+    if (blockIndex(lx, y, lz) >= chunk.blocks.length) {
+      if (id === 0) return;
+      this.ensureCapacity(chunk, blockIndex(lx, y, lz));
+    }
     chunk.blocks[blockIndex(lx, y, lz)] = id;
     const chunkKey = this.key(cx, cz);
     let chunkEdits = this.edits.get(chunkKey);
@@ -1945,7 +1960,7 @@ export class VoxelGame {
 
   private blockAtForMesh(chunk: Chunk, lx: number, y: number, lz: number): number {
     if (y < 0 || y >= WORLD_HEIGHT) return 0;
-    if (lx >= 0 && lx < CHUNK_SIZE && lz >= 0 && lz < CHUNK_SIZE) return chunk.blocks[blockIndex(lx, y, lz)];
+    if (lx >= 0 && lx < CHUNK_SIZE && lz >= 0 && lz < CHUNK_SIZE) return chunk.blocks[blockIndex(lx, y, lz)] ?? 0;
     return this.getBlock(chunk.cx * CHUNK_SIZE + lx, y, chunk.cz * CHUNK_SIZE + lz);
   }
 
@@ -1986,7 +2001,7 @@ export class VoxelGame {
       for (let lz = 0; lz < CHUNK_SIZE; lz++) {
         for (let lx = 0; lx < CHUNK_SIZE; lx++) {
           const id = chunk.blocks[blockIndex(lx, y, lz)];
-          if (id === 0) continue;
+          if (!id) continue;
           const def = BLOCKS[id];
           if (!def) continue;
           const light = def.emissive ? 1.18 : this.skyLight(chunk, lx, y, lz);
