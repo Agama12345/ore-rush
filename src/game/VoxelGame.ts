@@ -112,6 +112,9 @@ export type RunSummary = {
   finishedAt: number;
 };
 
+/** how far (in blocks) a mob's voice can be heard */
+const MOB_HEARING_RANGE = 9;
+
 const SAVE_KEY = "oreRush.save.v1";
 
 export type ContainerType = "inventory" | "table" | "furnace" | "chest";
@@ -3113,8 +3116,9 @@ export class VoxelGame {
       /* voices */
       mob.soundTimer -= dt;
       if (mob.soundTimer <= 0) {
-        mob.soundTimer = 7 + Math.random() * 12;
-        if (distToPlayer < 18) this.sfx.mob(mob.kind);
+        mob.soundTimer = 4 + Math.random() * 9;
+        // animal voices carry 9 blocks, no further
+        if (distToPlayer < MOB_HEARING_RANGE) this.sfx.mob(mob.kind);
       }
     }
     if (this.mobs.length < MAX_MOBS && Math.random() < dt * 0.35) this.spawnMobs(false);

@@ -168,6 +168,17 @@ export type GenOptions = { seed: number; oreBoost: boolean; coldMode?: boolean }
 
 function caveAt(wx: number, y: number, wz: number, seed: number) {
   const region = noise2(wx * 0.006, wz * 0.006, seed + 1511);
+
+  // winding "spaghetti" tunnels: where two noise fields are both near their midpoint, a thin
+  // tube is left, so tunnels are long, connected and walkable instead of isolated bubbles
+  if (y > 5 && region > 0.3) {
+    const a = noise3(wx * 0.028, y * 0.04, wz * 0.028, seed + 3001);
+    if (Math.abs(a - 0.5) < 0.05) {
+      const b = noise3(wx * 0.028 + 91, y * 0.04, wz * 0.028 - 53, seed + 3002);
+      if (Math.abs(b - 0.5) < 0.05) return true;
+    }
+  }
+
   if (region < 0.46) return false;
 
   const worm = noise3(wx * 0.042, y * 0.075, wz * 0.042, seed + 77);
@@ -253,6 +264,7 @@ export function generateChunk(
 ) {
   const { seed, coldMode } = opts;
   blocks.fill(0);
+  const carve = buildEntranceCarve(cx, cz, seed, !!coldMode);
 
   for (let lz = 0; lz < CHUNK_SIZE; lz++) {
     for (let lx = 0; lx < CHUNK_SIZE; lx++) {
@@ -303,7 +315,8 @@ export function generateChunk(
         }
 
         // keep the top two layers solid so grass, flowers and trees never hang over a cave
-        if (y > 2 && depth > 1 && caveAt(wx, y, wz, seed)) {
+        const carved = carve !== null && carve[blockIndex(lx, y, lz)] === 1;
+        if (y > 2 && ((depth > 1 && caveAt(wx, y, wz, seed)) || carved)) {
           // lava pools only sit on something solid, never float in mid-air
           const below = blocks[blockIndex(lx, y - 1, lz)];
           const supported = below !== 0 && below !== B.COBWEB;
@@ -384,6 +397,89 @@ function surfaceKind(biome: number, height: number): "grass" | "sand" | "snow" |
   return "grass";
 }
 
+/* ---------------- Cave entrances ----------------
+ * One slanted shaft per 56x56 cell: it starts at the surface, runs down at an angle and ends in a
+ * small chamber, so there are real ways into the caves. Positions come from the seed only, so a shaft
+ * that crosses a chunk border is carved identically by both chunks. */
+const MOUTH_CELL = 56;
+
+function mouthOf(gx: number, gz: number, seed: number) {
+  if (hash2(gx * 17.3, gz * 5.1, seed + 7001) < 0.42) return null;
+  const px = gx * MOUTH_CELL + Math.floor(hash2(gx * 3.7, gz * 9.3, seed + 7002) * MOUTH_CELL);
+  const pz = gz * MOUTH_CELL + Math.floor(hash2(gx * 8.1, gz * 2.9, seed + 7003) * MOUTH_CELL);
+  const angle = hash2(gx * 6.1, gz * 4.3, seed + 7004) * Math.PI * 2;
+  const length = 30 + hash2(gx * 1.9, gz * 7.7, seed + 7005) * 16;
+  return { px, pz, angle, length };
+}
+
+function nearCaveMouth(wx: number, wz: number, seed: number) {
+  const gx0 = Math.floor(wx / MOUTH_CELL);
+  const gz0 = Math.floor(wz / MOUTH_CELL);
+  for (let gz = gz0 - 1; gz <= gz0 + 1; gz++) {
+    for (let gx = gx0 - 1; gx <= gx0 + 1; gx++) {
+      const m = mouthOf(gx, gz, seed);
+      if (!m) continue;
+      for (let t = 0; t <= 12; t += 3) {
+        const dx = wx - (m.px + Math.cos(m.angle) * t * 0.75);
+        const dz = wz - (m.pz + Math.sin(m.angle) * t * 0.75);
+        if (dx * dx + dz * dz < 36) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function buildEntranceCarve(cx: number, cz: number, seed: number, coldMode: boolean): Uint8Array | null {
+  const x0 = cx * CHUNK_SIZE;
+  const z0 = cz * CHUNK_SIZE;
+  let carve: Uint8Array | null = null;
+  const stamp = (sx: number, sy: number, sz: number, r: number) => {
+    const ri = Math.ceil(r);
+    if (sx + ri < x0 || sx - ri >= x0 + CHUNK_SIZE || sz + ri < z0 || sz - ri >= z0 + CHUNK_SIZE) return;
+    if (!carve) carve = new Uint8Array(CHUNK_VOLUME);
+    for (let dy = -ri; dy <= ri; dy++) {
+      const y = Math.round(sy) + dy;
+      if (y < 3 || y >= GEN_HEIGHT) continue;
+      for (let dz = -ri; dz <= ri; dz++) {
+        for (let dx = -ri; dx <= ri; dx++) {
+          if (dx * dx + dy * dy + dz * dz > r * r) continue;
+          const lx = Math.round(sx) + dx - x0;
+          const lz = Math.round(sz) + dz - z0;
+          if (lx < 0 || lz < 0 || lx >= CHUNK_SIZE || lz >= CHUNK_SIZE) continue;
+          carve[blockIndex(lx, y, lz)] = 1;
+        }
+      }
+    }
+  };
+
+  const reach = 50;
+  for (let gz = Math.floor((z0 - reach) / MOUTH_CELL); gz <= Math.floor((z0 + CHUNK_SIZE + reach) / MOUTH_CELL); gz++) {
+    for (let gx = Math.floor((x0 - reach) / MOUTH_CELL); gx <= Math.floor((x0 + CHUNK_SIZE + reach) / MOUTH_CELL); gx++) {
+      const m = mouthOf(gx, gz, seed);
+      if (!m) continue;
+      if (m.px < x0 - reach || m.px > x0 + CHUNK_SIZE + reach || m.pz < z0 - reach || m.pz > z0 + CHUNK_SIZE + reach) continue;
+      const col = sampleColumn(m.px, m.pz, seed, coldMode);
+      if (col.height <= SEA_LEVEL + 3 || col.biome === Biome.OCEAN || col.biome === Biome.BEACH) continue;
+      const dirX = Math.cos(m.angle);
+      const dirZ = Math.sin(m.angle);
+      let endX = m.px;
+      let endY = col.height;
+      let endZ = m.pz;
+      for (let t = 0; t <= m.length; t += 0.7) {
+        const sx = m.px + dirX * t * 0.75;
+        const sz = m.pz + dirZ * t * 0.75;
+        const sy = Math.max(9, col.height + 1.5 - t * 0.8);
+        stamp(sx, sy, sz, Math.max(1.8, 2.8 - t * 0.02));
+        endX = sx;
+        endY = sy;
+        endZ = sz;
+      }
+      stamp(endX, endY + 1, endZ, 4.2); // chamber at the bottom
+    }
+  }
+  return carve;
+}
+
 type TreeKind = {
   log: number;
   leaf: number;
@@ -407,6 +503,7 @@ function treeAt(wx: number, wz: number, seed: number, coldMode = false): TreeKin
   const { height, biome } = sampleColumn(wx, wz, seed, coldMode);
   const kind = surfaceKind(biome, height);
   if (kind !== "grass" && kind !== "snow") return null;
+  if (nearCaveMouth(wx, wz, seed)) return null;
 
   const accept = coldMode
     ? 0.85
