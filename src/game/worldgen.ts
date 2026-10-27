@@ -166,23 +166,26 @@ export function sampleColumn(wx: number, wz: number, seed: number, coldMode = fa
 /* ---------------- Caves, ore veins, lava lakes ---------------- */
 export type GenOptions = { seed: number; oreBoost: boolean; coldMode?: boolean };
 
-function caveAt(wx: number, y: number, wz: number, seed: number) {
+function caveAt(wx: number, y: number, wz: number, seed: number, height: number) {
+  // caves live deep: never within 18 blocks of the surface and never above y 52, thinning out towards the top
+  if (y > height - 18 || y > 52) return false;
+  const lift = Math.min(1, Math.max(0, (52 - y) / 30)); // 1 deep down, 0 near the ceiling
   const region = noise2(wx * 0.006, wz * 0.006, seed + 1511);
 
   // winding "spaghetti" tunnels: where two noise fields are both near their midpoint, a thin
   // tube is left, so tunnels are long, connected and walkable instead of isolated bubbles
   if (y > 5 && region > 0.3) {
     const a = noise3(wx * 0.028, y * 0.04, wz * 0.028, seed + 3001);
-    if (Math.abs(a - 0.5) < 0.05) {
+    if (Math.abs(a - 0.5) < 0.05 * lift) {
       const b = noise3(wx * 0.028 + 91, y * 0.04, wz * 0.028 - 53, seed + 3002);
-      if (Math.abs(b - 0.5) < 0.05) return true;
+      if (Math.abs(b - 0.5) < 0.05 * lift) return true;
     }
   }
 
   if (region < 0.46) return false;
 
   const worm = noise3(wx * 0.042, y * 0.075, wz * 0.042, seed + 77);
-  const threshold = 0.74 - (region - 0.46) * 0.12;
+  const threshold = 0.74 - (region - 0.46) * 0.12 + (1 - lift) * 0.1;
   if (worm > threshold) return true;
 
   if (y < 30) {
@@ -211,7 +214,7 @@ const ORE_BANDS: { id: number; peak: number; spread: number; min: number; max: n
 function oreAt(wx: number, y: number, wz: number, seed: number, height: number, boost: boolean): number {
   if (y < 2 || y > height - 2) return 0;
   const vein = noise3(wx * 0.55, y * 0.55, wz * 0.55, seed + 4242);
-  if (vein < (boost ? 0.8 : 0.84)) return 0;
+  if (vein < (boost ? 0.87 : 0.905)) return 0;
   const roll = hash3(wx, y, wz, seed + 31337);
   if (height > SEA_LEVEL + 20 && y >= 40 && roll < 0.03) return B.EMERALD;
   // weight of every ore that can exist at this depth
@@ -316,7 +319,7 @@ export function generateChunk(
 
         // keep the top two layers solid so grass, flowers and trees never hang over a cave
         const carved = carve !== null && carve[blockIndex(lx, y, lz)] === 1;
-        if (y > 2 && ((depth > 1 && caveAt(wx, y, wz, seed)) || carved)) {
+        if (y > 2 && ((depth > 1 && caveAt(wx, y, wz, seed, height)) || carved)) {
           // lava pools only sit on something solid, never float in mid-air
           const below = blocks[blockIndex(lx, y - 1, lz)];
           const supported = below !== 0 && below !== B.COBWEB;

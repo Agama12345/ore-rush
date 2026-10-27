@@ -202,6 +202,7 @@ export const T = {
   BED_TOP: 102,
   BED_SIDE: 103,
   COAL_BLOCK_TILE: 104,
+  CAMPFIRE_ICON: 106,
   SPRUCE_PLANKS_TILE: 105,
   CAMPFIRE_MODEL_TL: 130,
   CAMPFIRE_MODEL_TR: 131,
@@ -355,7 +356,7 @@ export const BLOCKS: Record<number, BlockDef> = {
   [B.WOOL_PINK]: def({ id: B.WOOL_PINK, name: "Pink Wool", color: 0xed8dac, hardness: 0.25, score: 5 }, { top: T.WOOL_PINK }),
   [B.WOOL_CYAN]: def({ id: B.WOOL_CYAN, name: "Cyan Wool", color: 0x169b9c, hardness: 0.25, score: 5 }, { top: T.WOOL_CYAN }),
   [B.WOOL_PURPLE]: def({ id: B.WOOL_PURPLE, name: "Purple Wool", color: 0x7b2fbe, hardness: 0.25, score: 5 }, { top: T.WOOL_PURPLE }),
-  [B.CAMPFIRE]: def({ id: B.CAMPFIRE, name: "Campfire", color: 0xe87b1a, hardness: 0.5, score: 10, tool: "axe", emissive: true, glow: 0xffcf6b, replaceable: false, creative: true, model: true, transparent: true }, { top: T.CAMPFIRE_MODEL_TL, side: T.CAMPFIRE_MODEL_TL }),
+  [B.CAMPFIRE]: def({ id: B.CAMPFIRE, name: "Campfire", color: 0xe87b1a, hardness: 0.5, score: 10, tool: "axe", emissive: true, glow: 0xffcf6b, replaceable: false, creative: true, model: true, transparent: true }, { top: T.CAMPFIRE_ICON, side: T.CAMPFIRE_ICON }),
 
   /* plants */
   [B.TALL_GRASS]: plant(B.TALL_GRASS, "Tall Grass", 0x6cb24c, T.TALL_GRASS),
@@ -1064,6 +1065,36 @@ const campfireQuadPainter = (qx: number, qy: number): Painter => (ctx, ox, oy) =
     }
   }
 };
+/* hotbar / inventory icon of the campfire: drawn by hand, not taken from the 3D model's texture */
+const CAMPFIRE_ICON_ROWS = [
+  "................",
+  ".......R........",
+  "......RoR.......",
+  ".....RoyoR......",
+  ".....RoywoR.....",
+  "....RoyywyoR....",
+  "....RoyyyyoR....",
+  "..kk.RoyyoR.kk..",
+  ".kBBk.RooR.kBBk.",
+  ".kbbBk.kk.kBbbk.",
+  "..kbbBkbbkBbbk..",
+  "...kkbBbbBbkk...",
+  ".sSsSkkbbkkSsSs.",
+  "sSsSsSsSsSsSsSsS",
+  ".ssSsSsSsSsSsss.",
+  "................",
+];
+const CAMPFIRE_ICON_COLORS: Record<string, string> = {
+  k: "#2a1a0e", b: "#6b4528", B: "#8f6236", R: "#d93a1a", o: "#f07a1a", y: "#ffd24a", w: "#fff2a0", s: "#6f7578", S: "#8f969a",
+};
+PAINTERS[T.CAMPFIRE_ICON] = (ctx, ox, oy) => {
+  CAMPFIRE_ICON_ROWS.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const color = CAMPFIRE_ICON_COLORS[row[x]];
+      if (color) px(ctx, ox, oy, x, y, color);
+    }
+  });
+};
 PAINTERS[T.CAMPFIRE_MODEL_TL] = campfireQuadPainter(0, 0);
 PAINTERS[T.CAMPFIRE_MODEL_TR] = campfireQuadPainter(1, 0);
 PAINTERS[T.CAMPFIRE_MODEL_BL] = campfireQuadPainter(0, 1);
@@ -1295,7 +1326,7 @@ PAINTERS[T.CAMPFIRE_SIDE] = (ctx, ox, oy, rnd) => {
 const TRANSPARENT_TILES = new Set<number>([
   T.TALL_GRASS, T.POPPY, T.DANDELION, T.CORNFLOWER, T.MUSH_RED, T.MUSH_BROWN, T.DEAD_BUSH, T.SAPLING, T.TORCH,
   T.LEAVES, T.BIRCH_LEAVES, T.SPRUCE_LEAVES, T.JUNGLE_LEAVES, T.ACACIA_LEAVES, T.SUGAR_CANE, T.LILY, T.COBWEB, T.GLASS, T.PACKED_ICE_TILE, T.BLUE_ICE_TILE,
-  T.CAMPFIRE_MODEL_TL, T.CAMPFIRE_MODEL_TR, T.CAMPFIRE_MODEL_BL, T.CAMPFIRE_MODEL_BR,
+  T.CAMPFIRE_MODEL_TL, T.CAMPFIRE_MODEL_TR, T.CAMPFIRE_MODEL_BL, T.CAMPFIRE_MODEL_BR, T.CAMPFIRE_ICON,
 ]);
 
 type Atlas = { canvas: HTMLCanvasElement; url: string };

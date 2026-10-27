@@ -2009,9 +2009,14 @@ export class VoxelGame {
 
     const orientMap = this.orient.get(this.key(chunk.cx, chunk.cz));
 
-    let maxY = SEA_LEVEL + 1;
-    for (let i = 0; i < chunk.heights.length; i++) if (chunk.heights[i] > maxY) maxY = chunk.heights[i];
-    maxY = Math.min(WORLD_HEIGHT - 1, maxY + 8);
+    // mesh up to the highest block that really exists: tree crowns and player towers stand above the terrain heights
+    const layer = CHUNK_SIZE * CHUNK_SIZE;
+    let maxY = chunk.blocks.length / layer - 1;
+    scan: for (; maxY > SEA_LEVEL; maxY--) {
+      const base = maxY * layer;
+      for (let i = 0; i < layer; i++) if (chunk.blocks[base + i] !== 0) break scan;
+    }
+    maxY = Math.min(WORLD_HEIGHT - 1, maxY + 1);
 
     for (let y = 0; y <= maxY; y++) {
       for (let lz = 0; lz < CHUNK_SIZE; lz++) {
