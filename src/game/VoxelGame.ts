@@ -4,6 +4,7 @@ import {
   B,
   BLOCKS,
   CAMPFIRE_ATLAS,
+  BED_BOXES,
   LOG_BLOCKS,
   getAtlas,
   isCross,
@@ -2079,6 +2080,15 @@ export class VoxelGame {
           if (!def) continue;
           const light = def.emissive ? 1.18 : this.skyLight(chunk, lx, y, lz);
 
+          /* ---- the bed: a low model made of boxes ---- */
+          if (id === B.BED) {
+            const shade = Math.min(1.25, light);
+            for (const box of BED_BOXES) {
+              this.emitBox(buffers.cutout, originX + lx, y, originZ + lz, box.b, box.top, box.side, shade);
+            }
+            continue;
+          }
+
           /* ---- small 3D models (campfire) ---- */
           if (def.model) {
             const target = buffers.cutout;
@@ -2537,6 +2547,41 @@ export class VoxelGame {
   /* ------------------------------------------------------------------ */
   /*  Hand / held item view model                                       */
   /* ------------------------------------------------------------------ */
+  /** adds one textured box (block units, relative to the block corner) to a mesh buffer; the tile is cropped to the box size */
+  private emitBox(
+    target: { pos: number[]; uv: number[]; col: number[]; idx: number[]; count: number },
+    ox: number,
+    oy: number,
+    oz: number,
+    b: [number, number, number, number, number, number],
+    topTile: number,
+    sideTile: number,
+    light: number
+  ) {
+    const [x0, y0, z0, x1, y1, z1] = b;
+    // each face: 4 corners, the two axes that map to texture u/v, and a shade
+    const faces: { c: [number, number, number][]; u: (p: number[]) => number; v: (p: number[]) => number; tile: number; shade: number }[] = [
+      { c: [[x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]], u: (p) => p[0], v: (p) => p[2], tile: topTile, shade: 1 },
+      { c: [[x0, y0, z1], [x0, y0, z0], [x1, y0, z0], [x1, y0, z1]], u: (p) => p[0], v: (p) => p[2], tile: sideTile, shade: 0.55 },
+      { c: [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], u: (p) => p[2], v: (p) => 1 - p[1], tile: sideTile, shade: 0.84 },
+      { c: [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], u: (p) => p[2], v: (p) => 1 - p[1], tile: sideTile, shade: 0.84 },
+      { c: [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], u: (p) => p[0], v: (p) => 1 - p[1], tile: sideTile, shade: 0.76 },
+      { c: [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], u: (p) => p[0], v: (p) => 1 - p[1], tile: sideTile, shade: 0.76 },
+    ];
+    for (const f of faces) {
+      const [u0, v0, u1, v1] = tileUV(f.tile);
+      const base = target.count;
+      for (const c of f.c) {
+        target.pos.push(ox + c[0], oy + c[1], oz + c[2]);
+        target.uv.push(u0 + (u1 - u0) * f.u(c), v1 + (v0 - v1) * (1 - f.v(c)));
+        const s = f.shade * light;
+        target.col.push(s, s, s);
+      }
+      target.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      target.count += 4;
+    }
+  }
+
   private makeBlockCube(id: number, size: number) {
     const def = BLOCKS[id];
     const geometry = new THREE.BoxGeometry(size, size, size);

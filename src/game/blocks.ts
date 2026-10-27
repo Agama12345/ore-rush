@@ -379,7 +379,7 @@ export const BLOCKS: Record<number, BlockDef> = {
   [B.NETHERRACK]: def({ id: B.NETHERRACK, name: "Netherrack", color: 0x723636, hardness: 0.25, score: 4, tool: "pickaxe" }, { top: T.NETHERRACK }),
   [B.COAL_BLOCK]: def({ id: B.COAL_BLOCK, name: "Coal Block", color: 0x2a2a2a, hardness: 5, score: 8, tool: "pickaxe" }, { top: T.COAL_BLOCK_TILE }),
   [B.SPRUCE_PLANKS]: def({ id: B.SPRUCE_PLANKS, name: "Spruce Planks", color: 0x6e4a2a, hardness: 0.42, score: 5, tool: "axe" }, { top: T.SPRUCE_PLANKS_TILE }),
-  [B.BED]: def({ id: B.BED, name: "Bed", color: 0xb83b3b, hardness: 0.3, score: 6, tool: "axe" }, { top: T.BED_TOP, side: T.BED_SIDE }),
+  [B.BED]: def({ id: B.BED, name: "Bed", color: 0xb83b3b, hardness: 0.3, score: 6, tool: "axe", solid: false, transparent: true }, { top: T.BED_TOP, side: T.BED_SIDE }),
 };export const ORE_IDS = [B.COAL, B.IRON, B.GOLD, B.REDSTONE, B.LAPIS, B.DIAMOND, B.EMERALD];
 
 /** blocks that can lie on their side (axis X or Z) when placed against a wall */
@@ -1066,6 +1066,18 @@ const campfireQuadPainter = (qx: number, qy: number): Painter => (ctx, ox, oy) =
   }
 };
 /* hotbar / inventory icon of the campfire: drawn by hand, not taken from the 3D model's texture */
+/** the bed is drawn as a low 3D model: [x0,y0,z0,x1,y1,z1] in block units with the tiles of its top and sides */
+export const BED_BOXES: { b: [number, number, number, number, number, number]; top: number; side: number }[] = [
+  { b: [0.02, 0, 0.02, 0.16, 0.22, 0.16], top: T.PLANKS, side: T.PLANKS },
+  { b: [0.84, 0, 0.02, 0.98, 0.22, 0.16], top: T.PLANKS, side: T.PLANKS },
+  { b: [0.02, 0, 0.84, 0.16, 0.22, 0.98], top: T.PLANKS, side: T.PLANKS },
+  { b: [0.84, 0, 0.84, 0.98, 0.22, 0.98], top: T.PLANKS, side: T.PLANKS },
+  { b: [0, 0.2, 0, 1, 0.38, 1], top: T.PLANKS, side: T.BED_SIDE },
+  { b: [0.04, 0.38, 0.04, 0.96, 0.56, 0.96], top: T.BED_TOP, side: T.WOOL_WHITE },
+  { b: [0.12, 0.56, 0.06, 0.88, 0.66, 0.3], top: T.WOOL_WHITE, side: T.WOOL_WHITE },
+  { b: [0, 0.2, 0, 1, 0.86, 0.08], top: T.PLANKS, side: T.PLANKS },
+];
+
 const CAMPFIRE_ICON_ROWS = [
   "................",
   ".......R........",
