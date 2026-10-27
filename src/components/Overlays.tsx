@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { FlashData, PopupData, ScoreEntry } from "../types";
 import type { PublicStats, RunSummary } from "../game/VoxelGame";
 import { B } from "../game/blocks";
@@ -38,6 +38,10 @@ export function PauseMenu({
   touch,
   renderDistance,
   onRenderDistance,
+  farView,
+  onFarView,
+  onSwitchMode,
+  onTeleport,
   onResume,
   onRestart,
   onHelp,
@@ -52,6 +56,10 @@ export function PauseMenu({
   touch: boolean;
   renderDistance: number;
   onRenderDistance: (value: number) => void;
+  farView: number;
+  onFarView: (value: number) => void;
+  onSwitchMode: (mode: "survival" | "creative") => void;
+  onTeleport: (x: number, z: number, y?: number) => boolean;
   onResume: () => void;
   onRestart: () => void;
   onHelp: () => void;
@@ -62,6 +70,19 @@ export function PauseMenu({
   onSkin: () => void;
 }) {
   const sprint = stats.mode === "sprint";
+  const canSwitch = stats.mode === "survival" || stats.mode === "creative";
+  const [tpX, setTpX] = useState("");
+  const [tpY, setTpY] = useState("");
+  const [tpZ, setTpZ] = useState("");
+  const [tpFailed, setTpFailed] = useState(false);
+  const doTeleport = () => {
+    const x = Number(tpX.trim().replace(",", "."));
+    const z = Number(tpZ.trim().replace(",", "."));
+    const y = tpY.trim() === "" ? undefined : Number(tpY.trim().replace(",", "."));
+    const ok = tpX.trim() !== "" && tpZ.trim() !== "" && onTeleport(x, z, y);
+    setTpFailed(!ok);
+    if (ok) onResume();
+  };
   const cards = sprint
     ? [
         { label: t("score"), value: fmt(stats.score) },
@@ -121,6 +142,77 @@ export function PauseMenu({
           />
           <span className="w-6 text-right font-pixel text-xs text-ink">{renderDistance}</span>
         </label>
+
+        <label className="mt-2 flex items-center gap-2 rounded-[6px] border-2 border-ink/15 bg-[#efe5c9] px-2.5 py-2">
+          <span className="font-pixel text-[9px] uppercase tracking-[0.12em] text-ink/50">{t("farView")}</span>
+          <input
+            type="range"
+            min={0}
+            max={1000}
+            step={100}
+            value={farView}
+            onChange={(e) => onFarView(Number(e.target.value))}
+            aria-label={t("farView")}
+            className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-ink/20 accent-[#4aa83b]"
+          />
+          <span className="w-10 text-right font-pixel text-xs text-ink">{farView}</span>
+        </label>
+
+        {canSwitch && (
+          <div className="mt-2 flex items-center gap-2 rounded-[6px] border-2 border-ink/15 bg-[#efe5c9] px-2.5 py-2">
+            <span className="font-pixel text-[9px] uppercase tracking-[0.12em] text-ink/50">{t("gameMode")}</span>
+            <div className="ml-auto grid grid-cols-2 gap-1.5">
+              {(["survival", "creative"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => onSwitchMode(mode)}
+                  aria-pressed={stats.mode === mode}
+                  className={cx(
+                    "rounded-[5px] border-2 px-2 py-1 font-pixel text-[9px] uppercase tracking-[0.1em] transition",
+                    stats.mode === mode ? "border-ink/60 bg-[#4aa83b] text-white" : "border-ink/20 bg-white/50 text-ink/60 hover:bg-white"
+                  )}
+                >
+                  {t(mode)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-2 rounded-[6px] border-2 border-ink/15 bg-[#efe5c9] px-2.5 py-2">
+          <p className="font-pixel text-[9px] uppercase tracking-[0.12em] text-ink/50">
+            {t("teleport")} · {t("youAreAt")} {stats.position.x}, {stats.position.y}, {stats.position.z}
+          </p>
+          <div className="mt-1.5 flex items-center gap-1.5">
+            {([["X", tpX, setTpX], ["Y", tpY, setTpY], ["Z", tpZ, setTpZ]] as const).map(([label, value, set]) => (
+              <input
+                key={label}
+                value={value}
+                onChange={(e) => {
+                  set(e.target.value);
+                  setTpFailed(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Escape") e.stopPropagation();
+                  if (e.key === "Enter") doTeleport();
+                }}
+                inputMode="decimal"
+                placeholder={label === "Y" ? "Y (auto)" : label}
+                aria-label={label}
+                className="min-w-0 flex-1 rounded-[5px] border-2 border-ink/20 bg-white/70 px-1.5 py-1 text-center font-pixel text-[10px] text-ink outline-none focus:border-ink/50"
+              />
+            ))}
+            <button
+              type="button"
+              onClick={doTeleport}
+              className="rounded-[5px] border-2 border-ink/40 bg-[#4aa83b] px-2.5 py-1 font-pixel text-[9px] uppercase tracking-[0.1em] text-white transition hover:brightness-110"
+            >
+              {t("go")}
+            </button>
+          </div>
+          {tpFailed && <p className="mt-1 font-pixel text-[8px] uppercase tracking-[0.1em] text-[#b3402b]">{t("tpInvalid")}</p>}
+        </div>
 
         <div className="mt-4 flex flex-col gap-2.5">
           <PixelButton size="md" onClick={onResume} icon={<PlayIcon className="h-3.5 w-3.5" />} className="w-full">

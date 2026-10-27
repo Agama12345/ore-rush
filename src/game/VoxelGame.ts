@@ -337,6 +337,7 @@ export class VoxelGame {
   private width = 1;
   private height = 1;
   private renderDistance = 7;
+  private farView = FAR_VIEW;
 
   /* world */
   private seed = 1337;
@@ -403,6 +404,8 @@ export class VoxelGame {
   /* state */
   private screen: GameScreen = "menu";
   private mode: GameMode = "sprint";
+  /** a survival world that was switched to creative from the pause menu keeps being saved as survival */
+  private savedAsSurvival = false;
   private score = 0;
   private timeLeft = RUN_TIME;
   private combo = 0;
@@ -529,7 +532,8 @@ export class VoxelGame {
     });
 
     this.scene.fog = new THREE.Fog(0x8fc7ff, this.renderDistance * CHUNK_SIZE * 0.55, FAR_VIEW * 0.97);
-    this.far.setRadius(this.isTouch ? FAR_VIEW / 2 : FAR_VIEW);
+    this.farView = this.isTouch ? FAR_VIEW / 2 : FAR_VIEW;
+    this.far.setRadius(this.farView);
     this.scene.add(this.far.group);
     this.scene.add(this.worldGroup, this.mobRoot, this.arrowRoot, this.dropRoot);
 
@@ -638,6 +642,7 @@ export class VoxelGame {
     this.sfx.ensure();
     this.sfx.start();
     this.mode = mode;
+    this.savedAsSurvival = false;
     this.oreBoost = mode === "sprint";
     this.sfx.setBlizzard(mode === "cold");
     if (this.container) this.closeContainer(true);
@@ -669,7 +674,7 @@ export class VoxelGame {
 
   saveGame() {
     if (this.screen !== "playing" && this.screen !== "paused") return;
-    if (this.mode !== "survival" && this.mode !== "cold") return;
+    if (this.mode !== "survival" && this.mode !== "cold" && !this.savedAsSurvival) return;
     const slots = (list: HotbarSlot[]) => list.map((s) => [s.id, s.count]);
     const edits: Record<string, number[]> = {};
     this.edits.forEach((map, key) => {
@@ -679,7 +684,7 @@ export class VoxelGame {
     });
     const data = {
       v: 1,
-      mode: this.mode,
+      mode: this.savedAsSurvival ? "survival" : this.mode,
       seed: this.seed,
       edits,
       orient: Object.fromEntries([...this.orient.entries()].map(([key, map]) => [key, [...map.entries()].flat()])),
@@ -716,6 +721,7 @@ export class VoxelGame {
     this.sfx.ensure();
     this.sfx.start();
     this.mode = data.mode;
+    this.savedAsSurvival = false;
     this.oreBoost = false;
     this.sfx.setBlizzard(this.mode === "cold");
     if (this.container) this.closeContainer(true);
@@ -861,8 +867,15 @@ export class VoxelGame {
   setRenderDistance(distance: number) {
     this.renderDistance = clamp(Math.round(distance), 3, 12);
     const fog = this.scene.fog as THREE.Fog;
-    fog.far = FAR_VIEW * 0.97;
+    fog.far = Math.max(this.renderDistance * CHUNK_SIZE * 1.4, (this.farView || this.renderDistance * CHUNK_SIZE) * 0.97);
     fog.near = this.renderDistance * CHUNK_SIZE * 0.55;
+  }
+
+  /** how far (in blocks) the cheap distant terrain is drawn; 0 turns it off */
+  setFarView(blocks: number) {
+    this.farView = clamp(Math.round(blocks), 0, FAR_VIEW);
+    this.far.setRadius(this.farView);
+    (this.scene.fog as THREE.Fog).far = Math.max(this.renderDistance * CHUNK_SIZE * 1.4, (this.farView || this.renderDistance * CHUNK_SIZE) * 0.97);
   }
 
   setMoveInput(x: number, y: number) {
@@ -900,6 +913,45 @@ export class VoxelGame {
     }
     this.lastJumpTap = now;
     this.jumpBuffer = 0.16;
+  }
+
+  /** survival <-> creative from the pause menu (other modes have their own rules and cannot be switched) */
+  switchMode(next: "survival" | "creative") {
+    if (this.mode === next) return;
+    if (this.mode !== "survival" && this.mode !== "creative") return;
+    if (this.mode === "survival") this.savedAsSurvival = true;
+    this.mode = next;
+    this.player.flying = false;
+    this.player.fallStart = this.player.pos.y;
+    if (next === "survival") {
+      // creative stacks are endless; survival needs real counts
+      const fix = (list: HotbarSlot[]) => {
+        for (const slot of list) if (slot.id !== 0 && slot.count < 0) slot.count = Math.min(16, stackSize(slot.id));
+      };
+      fix(this.hotbar);
+      fix(this.backpack);
+      this.health = Math.max(this.health, 1);
+    }
+    this.refreshHandModel();
+    this.emitStats(true);
+  }
+
+  /** move the player; without a height the point is placed above the terrain at x/z */
+  teleport(x: number, z: number, y?: number) {
+    if (!Number.isFinite(x) || !Number.isFinite(z) || (y !== undefined && !Number.isFinite(y))) return false;
+    const limit = 29_999_000;
+    const tx = clamp(x, -limit, limit);
+    const tz = clamp(z, -limit, limit);
+    let ty = y;
+    if (ty === undefined) ty = sampleColumn(Math.floor(tx), Math.floor(tz), this.seed, this.mode === "cold").height + 3;
+    ty = clamp(ty, 3, WORLD_HEIGHT - 3);
+    this.player.pos.set(tx, ty, tz);
+    this.player.vel.set(0, 0, 0);
+    this.player.fallStart = ty;
+    this.player.onGround = false;
+    this.camera.position.set(tx, ty + EYE_HEIGHT, tz);
+    this.emitStats(true);
+    return true;
   }
 
   toggleFly() {
