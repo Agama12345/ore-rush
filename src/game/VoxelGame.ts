@@ -676,7 +676,8 @@ export class VoxelGame {
   saveGame() {
     if (this.screen !== "playing" && this.screen !== "paused") return;
     if (this.mode !== "survival" && this.mode !== "cold" && !this.savedAsSurvival) return;
-    const slots = (list: HotbarSlot[]) => list.map((s) => [s.id, s.count]);
+    // infinite (creative) stacks become ordinary stacks in a survival save
+    const slots = (list: HotbarSlot[]) => list.map((s) => [s.id, s.id !== 0 && s.count < 0 ? Math.min(16, stackSize(s.id)) : s.count]);
     const edits: Record<string, number[]> = {};
     this.edits.forEach((map, key) => {
       const flat: number[] = [];
@@ -717,7 +718,7 @@ export class VoxelGame {
       data = null;
     }
     if (!data || data.v !== 1 || (data.mode !== "survival" && data.mode !== "cold")) return false;
-    const toSlots = (list: number[][]): HotbarSlot[] => list.map(([id, count]) => ({ id, count }));
+    const toSlots = (list: number[][]): HotbarSlot[] => list.map(([id, count]) => ({ id, count: id !== 0 && count < 0 ? Math.min(16, stackSize(id)) : count }));
 
     this.sfx.ensure();
     this.sfx.start();
@@ -946,6 +947,7 @@ export class VoxelGame {
     let ty = y;
     if (ty === undefined) ty = sampleColumn(Math.floor(tx), Math.floor(tz), this.seed, this.mode === "cold").height + 3;
     ty = clamp(ty, 3, WORLD_HEIGHT - 3);
+    this.ensureChunk(Math.floor(tx / CHUNK_SIZE), Math.floor(tz / CHUNK_SIZE));
     this.player.pos.set(tx, ty, tz);
     this.player.vel.set(0, 0, 0);
     this.player.fallStart = ty;
@@ -1045,8 +1047,10 @@ export class VoxelGame {
           else if (slot.id === I.RAW_BEEF) cookedId = I.STEAK;
           else if (slot.id === I.RAW_CHICKEN) cookedId = I.COOKED_CHICKEN;
           if (cookedId) {
-            slot.count -= 1;
-            if (slot.count === 0) slot.id = 0;
+            if (slot.count > 0) {
+              slot.count -= 1;
+              if (slot.count === 0) slot.id = 0;
+            }
             this.addItem(cookedId, 1);
             this.sfx.sizzle();
             this.triggerSwing();
@@ -1142,8 +1146,10 @@ export class VoxelGame {
 
       // 5. Snowball Throwing
       if (slot.id === I.SNOWBALL) {
-        slot.count -= 1;
-        if (slot.count <= 0) slot.id = 0;
+        if (slot.count > 0) {
+          slot.count -= 1;
+          if (slot.count <= 0) slot.id = 0;
+        }
         this.shootSnowball();
         this.refreshHandModel();
         this.emitStats(true);
@@ -1154,8 +1160,10 @@ export class VoxelGame {
       if (ARMOR_POINTS[slot.id] !== undefined) {
         const worn = this.armorItem;
         this.armorItem = slot.id;
-        slot.count -= 1;
-        if (slot.count <= 0) slot.id = 0;
+        if (slot.count > 0) {
+          slot.count -= 1;
+          if (slot.count <= 0) slot.id = 0;
+        }
         if (worn) this.addItem(worn, 1);
         this.triggerSwing();
         this.sfx.slot();
@@ -1225,7 +1233,7 @@ export class VoxelGame {
       this.camera.getWorldDirection(this.tempDir);
       if (Math.abs(this.tempDir.x) > Math.abs(this.tempDir.z)) this.setOrient(x, y, z, 1);
     }
-    if (slot.count > 0) {
+    if (slot.count > 0 && this.mode !== "creative") {
       slot.count -= 1;
       if (slot.count === 0 && this.mode !== "sprint") {
         slot.id = 0;
@@ -1464,6 +1472,8 @@ export class VoxelGame {
   }
 
   private placePlayerAtSpawn() {
+    // a bed that was broken no longer sets the respawn point
+    if (this.respawnPos && this.getChunk(Math.floor(this.respawnPos.x / CHUNK_SIZE), Math.floor(this.respawnPos.z / CHUNK_SIZE)) && this.getBlock(Math.floor(this.respawnPos.x), Math.floor(this.respawnPos.y) - 1, Math.floor(this.respawnPos.z)) !== B.BED) this.respawnPos = null;
     const spawn = this.respawnPos ?? this.spawnPos;
     const bx = Math.floor(spawn.x);
     const bz = Math.floor(spawn.z);
@@ -1481,6 +1491,8 @@ export class VoxelGame {
   }
 
   private resetRunValues() {
+    this.temperature = MAX_TEMPERATURE;
+    this.temperatureTimer = 0;
     this.score = 0;
     this.timeLeft = RUN_TIME;
     this.combo = 0;
