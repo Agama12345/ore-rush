@@ -202,6 +202,7 @@ export const T = {
   BED_TOP: 102,
   BED_SIDE: 103,
   COAL_BLOCK_TILE: 104,
+  CAMPFIRE_ICON: 106,
   SPRUCE_PLANKS_TILE: 105,
   CAMPFIRE_MODEL_TL: 130,
   CAMPFIRE_MODEL_TR: 131,
@@ -355,7 +356,7 @@ export const BLOCKS: Record<number, BlockDef> = {
   [B.WOOL_PINK]: def({ id: B.WOOL_PINK, name: "Pink Wool", color: 0xed8dac, hardness: 0.25, score: 5 }, { top: T.WOOL_PINK }),
   [B.WOOL_CYAN]: def({ id: B.WOOL_CYAN, name: "Cyan Wool", color: 0x169b9c, hardness: 0.25, score: 5 }, { top: T.WOOL_CYAN }),
   [B.WOOL_PURPLE]: def({ id: B.WOOL_PURPLE, name: "Purple Wool", color: 0x7b2fbe, hardness: 0.25, score: 5 }, { top: T.WOOL_PURPLE }),
-  [B.CAMPFIRE]: def({ id: B.CAMPFIRE, name: "Campfire", color: 0xe87b1a, hardness: 0.5, score: 10, tool: "axe", emissive: true, glow: 0xffcf6b, replaceable: false, creative: true, model: true, transparent: true }, { top: T.CAMPFIRE_MODEL_TL, side: T.CAMPFIRE_MODEL_TL }),
+  [B.CAMPFIRE]: def({ id: B.CAMPFIRE, name: "Campfire", color: 0xe87b1a, hardness: 0.5, score: 10, tool: "axe", emissive: true, glow: 0xffcf6b, replaceable: false, creative: true, model: true, transparent: true }, { top: T.CAMPFIRE_ICON, side: T.CAMPFIRE_ICON }),
 
   /* plants */
   [B.TALL_GRASS]: plant(B.TALL_GRASS, "Tall Grass", 0x6cb24c, T.TALL_GRASS),
@@ -378,7 +379,7 @@ export const BLOCKS: Record<number, BlockDef> = {
   [B.NETHERRACK]: def({ id: B.NETHERRACK, name: "Netherrack", color: 0x723636, hardness: 0.25, score: 4, tool: "pickaxe" }, { top: T.NETHERRACK }),
   [B.COAL_BLOCK]: def({ id: B.COAL_BLOCK, name: "Coal Block", color: 0x2a2a2a, hardness: 5, score: 8, tool: "pickaxe" }, { top: T.COAL_BLOCK_TILE }),
   [B.SPRUCE_PLANKS]: def({ id: B.SPRUCE_PLANKS, name: "Spruce Planks", color: 0x6e4a2a, hardness: 0.42, score: 5, tool: "axe" }, { top: T.SPRUCE_PLANKS_TILE }),
-  [B.BED]: def({ id: B.BED, name: "Bed", color: 0xb83b3b, hardness: 0.3, score: 6, tool: "axe" }, { top: T.BED_TOP, side: T.BED_SIDE }),
+  [B.BED]: def({ id: B.BED, name: "Bed", color: 0xb83b3b, hardness: 0.3, score: 6, tool: "axe", solid: false, transparent: true }, { top: T.BED_TOP, side: T.BED_SIDE }),
 };export const ORE_IDS = [B.COAL, B.IRON, B.GOLD, B.REDSTONE, B.LAPIS, B.DIAMOND, B.EMERALD];
 
 /** blocks that can lie on their side (axis X or Z) when placed against a wall */
@@ -1064,6 +1065,48 @@ const campfireQuadPainter = (qx: number, qy: number): Painter => (ctx, ox, oy) =
     }
   }
 };
+/* hotbar / inventory icon of the campfire: drawn by hand, not taken from the 3D model's texture */
+/** the bed is drawn as a low 3D model: [x0,y0,z0,x1,y1,z1] in block units with the tiles of its top and sides */
+export const BED_BOXES: { b: [number, number, number, number, number, number]; top: number; side: number }[] = [
+  { b: [0.02, 0, 0.02, 0.16, 0.22, 0.16], top: T.PLANKS, side: T.PLANKS },
+  { b: [0.84, 0, 0.02, 0.98, 0.22, 0.16], top: T.PLANKS, side: T.PLANKS },
+  { b: [0.02, 0, 0.84, 0.16, 0.22, 0.98], top: T.PLANKS, side: T.PLANKS },
+  { b: [0.84, 0, 0.84, 0.98, 0.22, 0.98], top: T.PLANKS, side: T.PLANKS },
+  { b: [0, 0.2, 0, 1, 0.38, 1], top: T.PLANKS, side: T.BED_SIDE },
+  { b: [0.04, 0.38, 0.04, 0.96, 0.56, 0.96], top: T.BED_TOP, side: T.WOOL_WHITE },
+  { b: [0.12, 0.56, 0.06, 0.88, 0.66, 0.3], top: T.WOOL_WHITE, side: T.WOOL_WHITE },
+  { b: [0, 0.2, 0, 1, 0.86, 0.08], top: T.PLANKS, side: T.PLANKS },
+];
+
+const CAMPFIRE_ICON_ROWS = [
+  "................",
+  ".......R........",
+  "......RoR.......",
+  ".....RoyoR......",
+  ".....RoywoR.....",
+  "....RoyywyoR....",
+  "....RoyyyyoR....",
+  "..kk.RoyyoR.kk..",
+  ".kBBk.RooR.kBBk.",
+  ".kbbBk.kk.kBbbk.",
+  "..kbbBkbbkBbbk..",
+  "...kkbBbbBbkk...",
+  ".sSsSkkbbkkSsSs.",
+  "sSsSsSsSsSsSsSsS",
+  ".ssSsSsSsSsSsss.",
+  "................",
+];
+const CAMPFIRE_ICON_COLORS: Record<string, string> = {
+  k: "#2a1a0e", b: "#6b4528", B: "#8f6236", R: "#d93a1a", o: "#f07a1a", y: "#ffd24a", w: "#fff2a0", s: "#6f7578", S: "#8f969a",
+};
+PAINTERS[T.CAMPFIRE_ICON] = (ctx, ox, oy) => {
+  CAMPFIRE_ICON_ROWS.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const color = CAMPFIRE_ICON_COLORS[row[x]];
+      if (color) px(ctx, ox, oy, x, y, color);
+    }
+  });
+};
 PAINTERS[T.CAMPFIRE_MODEL_TL] = campfireQuadPainter(0, 0);
 PAINTERS[T.CAMPFIRE_MODEL_TR] = campfireQuadPainter(1, 0);
 PAINTERS[T.CAMPFIRE_MODEL_BL] = campfireQuadPainter(0, 1);
@@ -1295,7 +1338,7 @@ PAINTERS[T.CAMPFIRE_SIDE] = (ctx, ox, oy, rnd) => {
 const TRANSPARENT_TILES = new Set<number>([
   T.TALL_GRASS, T.POPPY, T.DANDELION, T.CORNFLOWER, T.MUSH_RED, T.MUSH_BROWN, T.DEAD_BUSH, T.SAPLING, T.TORCH,
   T.LEAVES, T.BIRCH_LEAVES, T.SPRUCE_LEAVES, T.JUNGLE_LEAVES, T.ACACIA_LEAVES, T.SUGAR_CANE, T.LILY, T.COBWEB, T.GLASS, T.PACKED_ICE_TILE, T.BLUE_ICE_TILE,
-  T.CAMPFIRE_MODEL_TL, T.CAMPFIRE_MODEL_TR, T.CAMPFIRE_MODEL_BL, T.CAMPFIRE_MODEL_BR,
+  T.CAMPFIRE_MODEL_TL, T.CAMPFIRE_MODEL_TR, T.CAMPFIRE_MODEL_BL, T.CAMPFIRE_MODEL_BR, T.CAMPFIRE_ICON,
 ]);
 
 type Atlas = { canvas: HTMLCanvasElement; url: string };

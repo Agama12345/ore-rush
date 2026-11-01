@@ -22,6 +22,7 @@ const KEY_SCORES = "orerush.scores.v2";
 const KEY_NAME = "orerush.name.v1";
 const KEY_MUTED = "orerush.muted.v1";
 const KEY_VIEW = "orerush.view.v1";
+const KEY_FAR = "orerush.far.v1";
 
 const emptySlots = (n: number) => new Array(n).fill(0).map(() => ({ id: 0, count: 0 }));
 
@@ -126,6 +127,12 @@ export default function App() {
     if (Number.isFinite(saved) && saved >= 3) return Math.min(11, saved);
     return detectTouch() ? 4 : 7;
   });
+  const [farView, setFarView] = useState(() => {
+    const saved = read(KEY_FAR);
+    const n = Number(saved);
+    if (saved !== null && saved !== "" && Number.isFinite(n) && n >= 0) return Math.min(1000, n);
+    return detectTouch() ? 500 : 1000;
+  });
   const [popups, setPopups] = useState<PopupData[]>([]);
   const [flash, setFlash] = useState<FlashData | null>(null);
   const [runResult, setRunResult] = useState<RunSummary | null>(null);
@@ -206,6 +213,14 @@ export default function App() {
     gameRef.current?.setRenderDistance(renderDistance);
     write(KEY_VIEW, String(renderDistance));
   }, [renderDistance]);
+
+  useEffect(() => {
+    gameRef.current?.setFarView(farView);
+    write(KEY_FAR, String(farView));
+  }, [farView]);
+
+  const switchMode = useCallback((mode: "survival" | "creative") => gameRef.current?.switchMode(mode), []);
+  const teleport = useCallback((x: number, z: number, y?: number) => gameRef.current?.teleport(x, z, y) ?? false, []);
 
   /* persist finished sprint runs */
   useEffect(() => {
@@ -456,6 +471,10 @@ export default function App() {
           touch={touch}
           renderDistance={renderDistance}
           onRenderDistance={setRenderDistance}
+          farView={farView}
+          onFarView={setFarView}
+          onSwitchMode={switchMode}
+          onTeleport={teleport}
           onResume={resumeGame}
           onRestart={restart}
           onHelp={() => setShowHelp(true)}
